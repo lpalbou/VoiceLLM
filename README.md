@@ -3,7 +3,6 @@
 [![PyPI version](https://img.shields.io/pypi/v/voicellm.svg)](https://pypi.org/project/voicellm/)
 [![Python Version](https://img.shields.io/pypi/pyversions/voicellm)](https://pypi.org/project/voicellm/)
 [![License](https://img.shields.io/pypi/l/voicellm)](https://github.com/lpalbou/voicellm/blob/main/LICENSE)
-[![Downloads](https://static.pepy.tech/badge/voicellm)](https://pepy.tech/project/voicellm)
 [![GitHub stars](https://img.shields.io/github/stars/lpalbou/voicellm?style=social)](https://github.com/lpalbou/voicellm/stargazers)
 
 A modular Python library for voice interactions with AI systems, providing text-to-speech (TTS) and speech-to-text (STT) capabilities with interrupt handling.
