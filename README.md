@@ -1,9 +1,10 @@
 # VoiceLLM
 
-[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
-[![macOS Sonoma 14.2](https://img.shields.io/badge/macOS-Sonoma%2014.2-brightgreen.svg)](https://www.apple.com/macos/
-sonoma/) [![Apple M3 Pro](https://img.shields.io/badge/Apple-M3%20Pro-purple.svg)](https://www.apple.com/
-macbook-pro-14-and-16/)
+[![PyPI version](https://img.shields.io/pypi/v/voicellm.svg)](https://pypi.org/project/voicellm/)
+[![Python Version](https://img.shields.io/pypi/pyversions/voicellm)](https://pypi.org/project/voicellm/)
+[![License](https://img.shields.io/pypi/l/voicellm)](https://github.com/lpalbou/voicellm/blob/main/LICENSE)
+[![Downloads](https://static.pepy.tech/badge/voicellm)](https://pepy.tech/project/voicellm)
+[![GitHub stars](https://img.shields.io/github/stars/lpalbou/voicellm?style=social)](https://github.com/lpalbou/voicellm/stargazers)
 
 A modular Python library for voice interactions with AI systems, providing text-to-speech (TTS) and speech-to-text (STT) capabilities with interrupt handling.
 
@@ -21,17 +22,18 @@ While we provide CLI and WEB examples, VoiceLLM is designed to be integrated in 
 
 ### Prerequisites
 
-- Python 3.10+ (3.11 recommended)
+- Python 3.8+ (3.11 recommended)
 - PortAudio for audio input/output
 
 ### Basic Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/voicellm.git
-cd voicellm
+# Install from PyPI
+pip install voicellm
 
-# Install with pip
+# Or clone the repository
+git clone https://github.com/lpalbou/voicellm.git
+cd voicellm
 pip install -e .
 ```
 
@@ -39,7 +41,7 @@ pip install -e .
 
 ```bash
 # Install with development dependencies
-pip install -e ".[dev]"
+pip install "voicellm[dev]"
 ```
 
 ### From Requirements File
@@ -107,7 +109,7 @@ Command line options:
 - `--debug`: Enable debug mode with detailed logging
 - `--api`: URL of the Ollama API (default: http://localhost:11434/api/chat)
 - `--model`: Ollama model to use (default: granite3.3:2b)
-  - Other examples : cogito:3b, phi4-mini:latest, qwen2.5:latest, cogito:latest, etc.
+  - Other examples : cogito:3b, phi4-mini:latest, qwen2.5:latest, cogito:latest, gemma3:latest, etc.
 - `--whisper`: Whisper model to use (tiny, base, small, medium, large)
 - `--no-voice`: Start in text mode instead of voice mode
 - `--system`: Custom system prompt
