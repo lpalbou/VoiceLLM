@@ -205,3 +205,5 @@ token.json
 .pypirc 
 
 deprecated/
+
+*.mem

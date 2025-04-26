@@ -15,11 +15,23 @@ import requests
 from voicellm import VoiceManager
 
 
+# ANSI color codes
+class Colors:
+    BLUE = "\033[94m"
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+    END = "\033[0m"
+
+
 class VoiceREPL(cmd.Cmd):
     """Voice-enabled REPL for LLM interaction."""
     
     intro = "Welcome to VoiceLLM CLI REPL. Type message, use /voice, or /help.\n"
-    prompt = "> "
+    prompt = f"{Colors.GREEN}> {Colors.END}"
     
     # Override cmd module settings
     ruler = ""  # No horizontal rule line
@@ -50,9 +62,19 @@ class VoiceREPL(cmd.Cmd):
         # Message history
         self.messages = [{"role": "system", "content": self.system_prompt}]
         
+        # Token counting
+        self.system_tokens = 0
+        self.user_tokens = 0
+        self.assistant_tokens = 0
+        self._count_system_tokens()
+        
         if self.debug_mode:
             print(f"Initialized with API URL: {api_url}")
             print(f"Using model: {model}")
+        
+    def _count_system_tokens(self):
+        """Count tokens in the system prompt."""
+        self._count_tokens(self.system_prompt, "system")
         
     def default(self, line):
         """Handle regular text input."""
@@ -64,6 +86,32 @@ class VoiceREPL(cmd.Cmd):
         if line.strip().lower() == "help":
             return self.do_help("")
         
+        # Handle the stop command directly
+        if line.strip().lower() == "stop":
+            return self.do_stop("")
+        
+        # Handle the tokens command directly
+        if line.strip().lower() == "tokens":
+            return self.do_tokens("")
+            
+        # Handle the save command (save filename)
+        if line.strip().lower().startswith("save "):
+            parts = line.strip().split(" ", 1)
+            if len(parts) == 2:
+                return self.do_save(parts[1])
+                
+        # Handle the load command (load filename)
+        if line.strip().lower().startswith("load "):
+            parts = line.strip().split(" ", 1)
+            if len(parts) == 2:
+                return self.do_load(parts[1])
+                
+        # Handle the model command (model model_name)
+        if line.strip().lower().startswith("model "):
+            parts = line.strip().split(" ", 1)
+            if len(parts) == 2:
+                return self.do_model(parts[1])
+        
         if self.voice_mode:
             if self.debug_mode:
                 print("Voice mode active. Use /voice off or say 'stop' to exit.")
@@ -72,59 +120,136 @@ class VoiceREPL(cmd.Cmd):
         self.process_query(line.strip())
         
     def process_query(self, query):
-        """Process user query and generate response."""
+        """Process a query and get a response from the LLM."""
         if not query:
             return
             
-        # Check for "stop" command
-        if query.lower() == "stop":
-            self.voice_manager.stop_speaking()
-            return
-            
-        # Add user message to history
-        self.messages.append({"role": "user", "content": query})
+        # Count user message tokens
+        self._count_tokens(query, "user")
         
+        # Create the message
+        user_message = {"role": "user", "content": query}
+        self.messages.append(user_message)
+        
+        if self.debug_mode:
+            print(f"Sending request to API: {self.api_url}")
+            
         try:
-            # Prepare API request
+            # Structure the payload with system prompt outside the messages array
             payload = {
                 "model": self.model,
                 "messages": self.messages,
-                "stream": False,
+                "stream": False  # Disable streaming for simplicity
             }
             
-            if self.debug_mode:
-                print(f"Sending request to API: {self.api_url}")
-                
-            # Send request to LLM API
+            # Make API request
             response = requests.post(self.api_url, json=payload)
             response.raise_for_status()
-            response_data = response.json()
             
-            # Extract response text
-            response_text = response_data["message"]["content"].strip()
-            
-            # Clean response (if needed)
-            response_text = self._clean_response(response_text)
+            # Try to parse response
+            try:
+                # First, try to parse as JSON
+                response_data = response.json()
                 
-            # Print response
-            if self.debug_mode:
-                print(f"LLM Response: {response_text}")
-            else:
-                print(f"{response_text}")
+                # Check for different API formats
+                if "message" in response_data and "content" in response_data["message"]:
+                    # Ollama format
+                    response_text = response_data["message"]["content"].strip()
+                elif "choices" in response_data and len(response_data["choices"]) > 0:
+                    # OpenAI format
+                    response_text = response_data["choices"][0]["message"]["content"].strip()
+                else:
+                    # Some other format
+                    response_text = str(response_data).strip()
+                    
+            except Exception as e:
+                if self.debug_mode:
+                    print(f"Error parsing JSON response: {e}")
+                
+                # Handle streaming or non-JSON response
+                response_text = response.text.strip()
+                
+                # Try to extract content from streaming format if possible
+                if response_text.startswith("{") and "content" in response_text:
+                    try:
+                        # Extract the last message if multiple streaming chunks
+                        lines = response_text.strip().split("\n")
+                        last_complete_line = lines[-1]
+                        for i in range(len(lines) - 1, -1, -1):
+                            if '"done":true' in lines[i]:
+                                last_complete_line = lines[i]
+                                break
+                                
+                        # Parse the message content
+                        import json
+                        data = json.loads(last_complete_line)
+                        if "message" in data and "content" in data["message"]:
+                            full_content = ""
+                            for line in lines:
+                                try:
+                                    chunk = json.loads(line)
+                                    if "message" in chunk and "content" in chunk["message"]:
+                                        full_content += chunk["message"]["content"]
+                                except:
+                                    pass
+                            response_text = full_content.strip()
+                    except Exception as e:
+                        if self.debug_mode:
+                            print(f"Error extracting content from streaming response: {e}")
+            
+            # Count assistant message tokens
+            self._count_tokens(response_text, "assistant")
             
             # Add to message history
             self.messages.append({"role": "assistant", "content": response_text})
             
-            # Play TTS if enabled
-            if self.use_tts:
-                self.voice_manager.speak(response_text, speed=self.tts_speed)
+            # Display the response with color
+            print(f"{Colors.CYAN}{response_text}{Colors.END}")
+            
+            # Speak the response if voice manager is available
+            if self.voice_manager:
+                self.voice_manager.speak(response_text)
+                
+        except Exception as e:
+            print(f"Error: {e}")
+            if self.debug_mode:
+                import traceback
+                traceback.print_exc()
+    
+    def _count_tokens(self, text, role):
+        """Count tokens in text."""
+        try:
+            import tiktoken
+            
+            # Initialize the tokenizer 
+            encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+            
+            # Count tokens
+            token_count = len(encoding.encode(text))
+            
+            # Update the token counts based on role
+            if role == "system":
+                self.system_tokens = token_count
+            elif role == "user":
+                self.user_tokens += token_count
+            elif role == "assistant":
+                self.assistant_tokens += token_count
+            
+            # Calculate total tokens
+            total_tokens = self.system_tokens + self.user_tokens + self.assistant_tokens
+            
+            if self.debug_mode:
+                print(f"{role.capitalize()} tokens: {token_count}")
+                print(f"Total tokens: {total_tokens}")
                     
+        except ImportError:
+            # If tiktoken is not available, just don't count tokens
+            pass
         except Exception as e:
             if self.debug_mode:
-                print(f"Query processing error: {e}")
-            else:
-                print("Error processing request. Please try again.")
-            
+                print(f"Error counting tokens: {e}")
+            pass
+    
     def _clean_response(self, text):
         """Clean LLM response text."""
         patterns = [
@@ -161,10 +286,17 @@ class VoiceREPL(cmd.Cmd):
     
     def _voice_callback(self, text):
         """Callback for voice recognition."""
-        # We already handle 'stop' in the voice recognizer's stop_callback
-        if text.lower() != "stop":
-            print(f"\nYou: {text}")
-            self.process_query(text)
+        # Print what the user said
+        print(f"\nYou: {text}")
+        
+        # Check if the user said 'stop' to exit voice mode
+        if text.lower() == "stop":
+            self._voice_stop_callback()
+            # Don't process "stop" as a query
+            return
+            
+        # Process the user's query
+        self.process_query(text)
     
     def _voice_stop_callback(self):
         """Callback when voice mode is stopped."""
@@ -226,6 +358,22 @@ class VoiceREPL(cmd.Cmd):
             print("Goodbye!")
         return True
     
+    def do_stop(self, arg):
+        """Stop voice recognition or TTS playback."""
+        # If in voice mode, exit voice mode
+        if self.voice_mode:
+            self._voice_stop_callback()
+            return
+            
+        # Even if not in voice mode, stop any ongoing TTS
+        if self.voice_manager:
+            self.voice_manager.stop_speaking()
+            # Do not show the "Stopped speech playback" message
+            return
+            
+        # If neither voice mode nor TTS is active - don't show any message
+        pass
+    
     def do_help(self, arg):
         """Show help information."""
         print("Commands:")
@@ -236,15 +384,188 @@ class VoiceREPL(cmd.Cmd):
         print("  /speed <number>    Set TTS speed (0.5-2.0)")
         print("  /whisper tiny|base Switch Whisper model")
         print("  /system <prompt>   Set system prompt")
+        print("  /stop              Stop voice mode or TTS playback")
+        print("  /tokens            Display token usage stats")
         print("  /help              Show this help")
+        print("  save <filename>    Save chat history to file")
+        print("  load <filename>    Load chat history from file")
+        print("  model <model_name> Change the LLM model")
+        print("  tokens             Display token usage stats")
+        print("  stop               Stop voice mode or TTS playback")
         print("  <message>          Send to LLM (text mode)")
         print("\nIn voice mode, say 'stop' to exit voice mode.")
+        print("You can also type 'stop' at any time to stop TTS playback.")
+        print("Type 'tokens' to show token usage statistics.")
     
     def emptyline(self):
         """Handle empty line input."""
         # Do nothing when an empty line is entered
         pass
 
+    def do_tokens(self, arg):
+        """Display token usage information."""
+        try:
+            total_tokens = self.system_tokens + self.user_tokens + self.assistant_tokens
+            
+            print(f"{Colors.YELLOW}Token usage:{Colors.END}")
+            print(f"  System prompt: {self.system_tokens} tokens")
+            print(f"  User messages: {self.user_tokens} tokens")
+            print(f"  AI responses:  {self.assistant_tokens} tokens")
+            print(f"  {Colors.BOLD}Total:         {total_tokens} tokens{Colors.END}")
+        except Exception as e:
+            if self.debug_mode:
+                print(f"Error displaying token count: {e}")
+            print("Token counting is not available.")
+            pass
+
+    def do_save(self, filename):
+        """Save chat history to file."""
+        try:
+            # Add .mem extension if not specified
+            if not filename.endswith('.mem'):
+                filename = f"{filename}.mem"
+                
+            # Prepare memory file structure
+            memory_data = {
+                "header": {
+                    "timestamp_utc": self._get_current_timestamp(),
+                    "model": self.model,
+                    "version": "0.1.4"  # This should be dynamically determined in a production app
+                },
+                "system_prompt": self.system_prompt,
+                "token_stats": {
+                    "system": self.system_tokens,
+                    "user": self.user_tokens,
+                    "assistant": self.assistant_tokens,
+                    "total": self.system_tokens + self.user_tokens + self.assistant_tokens
+                },
+                "messages": self.messages
+            }
+            
+            # Save to file with pretty formatting
+            with open(filename, 'w') as f:
+                json.dump(memory_data, f, indent=2)
+                
+            print(f"Chat history saved to {filename}")
+        except Exception as e:
+            if self.debug_mode:
+                print(f"Error saving chat history: {e}")
+            print(f"Failed to save chat history to {filename}")
+    
+    def _get_current_timestamp(self):
+        """Get current timestamp in the format YYYY-MM-DD HH-MM-SS."""
+        from datetime import datetime
+        return datetime.utcnow().strftime("%Y-%m-%d %H-%M-%S")
+
+    def do_load(self, filename):
+        """Load chat history from file."""
+        try:
+            # Add .mem extension if not specified
+            if not filename.endswith('.mem'):
+                filename = f"{filename}.mem"
+                
+            with open(filename, 'r') as f:
+                memory_data = json.load(f)
+            
+            # Handle both formats: new .mem format and legacy format (just messages array)
+            if isinstance(memory_data, dict) and "messages" in memory_data:
+                # New .mem format
+                
+                # Update model if specified
+                if "header" in memory_data and "model" in memory_data["header"]:
+                    old_model = self.model
+                    self.model = memory_data["header"]["model"]
+                    print(f"Model changed from {old_model} to {self.model}")
+                
+                # Update system prompt
+                if "system_prompt" in memory_data:
+                    self.system_prompt = memory_data["system_prompt"]
+                
+                # Load messages
+                if "messages" in memory_data and isinstance(memory_data["messages"], list):
+                    self.messages = memory_data["messages"]
+                else:
+                    print("Invalid messages format in memory file")
+                    return
+                    
+                # Restore token stats if available
+                if "token_stats" in memory_data:
+                    stats = memory_data["token_stats"]
+                    self.system_tokens = stats.get("system", 0)
+                    self.user_tokens = stats.get("user", 0)
+                    self.assistant_tokens = stats.get("assistant", 0)
+                else:
+                    # Reset token counts and recalculate
+                    self._reset_and_recalculate_tokens()
+                
+            elif isinstance(memory_data, list):
+                # Legacy format (just an array of messages)
+                self.messages = memory_data
+                
+                # Reset token counts and recalculate
+                self._reset_and_recalculate_tokens()
+                
+                # Extract system prompt if present
+                for msg in self.messages:
+                    if isinstance(msg, dict) and msg.get("role") == "system":
+                        self.system_prompt = msg.get("content", self.system_prompt)
+                        break
+            else:
+                print("Invalid memory file format")
+                return
+                
+            # Ensure there's a system message
+            self._ensure_system_message()
+                
+            print(f"Chat history loaded from {filename}")
+            
+        except FileNotFoundError:
+            print(f"File not found: {filename}")
+        except json.JSONDecodeError:
+            print(f"Invalid JSON format in {filename}")
+        except Exception as e:
+            if self.debug_mode:
+                print(f"Error loading chat history: {e}")
+            print(f"Failed to load chat history from {filename}")
+    
+    def _reset_and_recalculate_tokens(self):
+        """Reset token counts and recalculate for all messages."""
+        self.system_tokens = 0
+        self.user_tokens = 0
+        self.assistant_tokens = 0
+        
+        # Count tokens for all messages
+        for msg in self.messages:
+            if isinstance(msg, dict) and "content" in msg and "role" in msg:
+                self._count_tokens(msg["content"], msg["role"])
+    
+    def _ensure_system_message(self):
+        """Ensure there's a system message at the start of messages."""
+        has_system = False
+        for msg in self.messages:
+            if isinstance(msg, dict) and msg.get("role") == "system":
+                has_system = True
+                break
+                
+        if not has_system:
+            # Prepend a system message if none exists
+            self.messages.insert(0, {"role": "system", "content": self.system_prompt})
+    
+    def do_model(self, model_name):
+        """Change the LLM model."""
+        if not model_name:
+            print(f"Current model: {self.model}")
+            return
+            
+        old_model = self.model
+        self.model = model_name
+        print(f"Model changed from {old_model} to {model_name}")
+        
+        # Optionally add a system message indicating the model change
+        self.messages.append({
+            "role": "system", 
+            "content": f"[Model changed from {old_model} to {model_name}]"
+        })
 
 def parse_args():
     """Parse command line arguments."""

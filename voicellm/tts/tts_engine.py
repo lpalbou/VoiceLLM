@@ -7,8 +7,15 @@ import sounddevice as sd
 import os
 import sys
 import logging
+import warnings
 from TTS.api import TTS
 
+# Suppress the PyTorch FutureWarning about torch.load
+warnings.filterwarnings(
+    "ignore", 
+    message="You are using `torch.load` with `weights_only=False`", 
+    category=FutureWarning
+)
 
 class TTSEngine:
     """Text-to-speech engine with interrupt capability."""
