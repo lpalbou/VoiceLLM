@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voicellm"
+version = "0.1.0"
+description = "A modular Python library for voice interactions with AI systems"
+readme = "README.md"
+requires-python = ">=3.11.7"
+license = {text = "MIT"}
+authors = [
+    {name = "Laurent-Philippe Albou", email = "lpalbou@gmail.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    "numpy>=1.24.0",
+    "sounddevice>=0.4.6",
+    "webrtcvad>=2.0.10",
+    "PyAudio>=0.2.13",
+    "openai-whisper>=20230314",
+    "TTS>=0.21.0",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "soundfile>=0.12.1",
+    "requests>=2.31.0",
+    "flask>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=22.0.0",
+    "flake8>=5.0.0",
+]
+
+[project.urls]
+Repository = "https://github.com/lpalbou/voicellm"
+Documentation = "https://github.com/lpalbou/voicellm#readme"
+
+[project.scripts]
+voicellm = "voicellm.examples.voice_cli:main"
+voicellm-cli = "voicellm.__main__:main" 
