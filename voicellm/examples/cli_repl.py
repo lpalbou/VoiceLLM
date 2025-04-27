@@ -346,6 +346,12 @@ class VoiceREPL(cmd.Cmd):
     def do_clear(self, arg):
         """Clear chat history."""
         self.messages = [{"role": "system", "content": self.system_prompt}]
+        # Reset token counters
+        self.system_tokens = 0
+        self.user_tokens = 0
+        self.assistant_tokens = 0
+        # Recalculate system tokens
+        self._count_system_tokens()
         print("History cleared")
     
     def do_system(self, arg):
@@ -411,6 +417,9 @@ class VoiceREPL(cmd.Cmd):
     def do_tokens(self, arg):
         """Display token usage information."""
         try:
+            # Always recalculate tokens to ensure accuracy
+            self._reset_and_recalculate_tokens()
+            
             total_tokens = self.system_tokens + self.user_tokens + self.assistant_tokens
             
             print(f"{Colors.YELLOW}Token usage:{Colors.END}")
