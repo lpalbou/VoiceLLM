@@ -50,11 +50,12 @@ class VoiceREPL(cmd.Cmd):
         
         # Initialize voice manager
         self.voice_manager = VoiceManager(debug_mode=debug_mode)
+        self.voice_manager.set_speed(1.0)
+        self.voice_manager.set_whisper("tiny")
         
         # Settings
         self.use_tts = True
         self.voice_mode = False
-        self.tts_speed = 1.0
         
         # System prompt
         self.system_prompt = "Be a helpful and concise AI assistant."
@@ -287,7 +288,7 @@ class VoiceREPL(cmd.Cmd):
     def _voice_callback(self, text):
         """Callback for voice recognition."""
         # Print what the user said
-        print(f"\nYou: {text}")
+        print(f"\n> {text}")
         
         # Check if the user said 'stop' to exit voice mode
         if text.lower() == "stop":
@@ -319,10 +320,14 @@ class VoiceREPL(cmd.Cmd):
     
     def do_speed(self, arg):
         """Set the TTS speed multiplier."""
+        if not arg.strip():
+            print(f"Current TTS speed: {self.voice_manager.get_speed()}x")
+            return
+            
         try:
             speed = float(arg.strip())
             if 0.5 <= speed <= 2.0:
-                self.tts_speed = speed
+                self.voice_manager.set_speed(speed)
                 print(f"TTS speed set to {speed}x")
             else:
                 print("Speed should be between 0.5 and 2.0")
@@ -332,10 +337,11 @@ class VoiceREPL(cmd.Cmd):
     def do_whisper(self, arg):
         """Change Whisper model."""
         model = arg.strip()
-        if self.voice_manager.change_whisper_model(model):
-            print(f"Whisper model changed to {model}")
-        else:
-            print(f"Failed to change Whisper model to {model}")
+        if not model:
+            print(f"Current Whisper model: {self.voice_manager.get_whisper()}")
+            return
+        
+        self.voice_manager.set_whisper(model)            
     
     def do_clear(self, arg):
         """Clear chat history."""
@@ -439,6 +445,10 @@ class VoiceREPL(cmd.Cmd):
                     "assistant": self.assistant_tokens,
                     "total": self.system_tokens + self.user_tokens + self.assistant_tokens
                 },
+                "settings": {
+                    "tts_speed": self.voice_manager.get_speed(),
+                    "whisper_model": self.voice_manager.get_whisper()
+                },
                 "messages": self.messages
             }
             
@@ -464,12 +474,20 @@ class VoiceREPL(cmd.Cmd):
             if not filename.endswith('.mem'):
                 filename = f"{filename}.mem"
                 
+            if self.debug_mode:
+                print(f"Attempting to load from: {filename}")
+                
             with open(filename, 'r') as f:
                 memory_data = json.load(f)
+                
+            if self.debug_mode:
+                print(f"Successfully loaded JSON data from {filename}")
             
             # Handle both formats: new .mem format and legacy format (just messages array)
             if isinstance(memory_data, dict) and "messages" in memory_data:
                 # New .mem format
+                if self.debug_mode:
+                    print("Processing .mem format with messages")
                 
                 # Update model if specified
                 if "header" in memory_data and "model" in memory_data["header"]:
@@ -480,23 +498,42 @@ class VoiceREPL(cmd.Cmd):
                 # Update system prompt
                 if "system_prompt" in memory_data:
                     self.system_prompt = memory_data["system_prompt"]
+                    if self.debug_mode:
+                        print(f"Updated system prompt: {self.system_prompt}")
                 
                 # Load messages
                 if "messages" in memory_data and isinstance(memory_data["messages"], list):
                     self.messages = memory_data["messages"]
+                    if self.debug_mode:
+                        print(f"Loaded {len(self.messages)} messages")
                 else:
                     print("Invalid messages format in memory file")
                     return
                     
-                # Restore token stats if available
-                if "token_stats" in memory_data:
-                    stats = memory_data["token_stats"]
-                    self.system_tokens = stats.get("system", 0)
-                    self.user_tokens = stats.get("user", 0)
-                    self.assistant_tokens = stats.get("assistant", 0)
-                else:
-                    # Reset token counts and recalculate
-                    self._reset_and_recalculate_tokens()
+                # Recompute token stats if available
+                self._reset_and_recalculate_tokens()
+                
+                # Restore settings if available
+                if "settings" in memory_data:
+                    try:
+                        settings = memory_data["settings"]
+                        
+                        # Restore TTS speed
+                        if "tts_speed" in settings:
+                            speed = settings.get("tts_speed", 1.0)
+                            self.voice_manager.set_speed(speed)
+                            # Don't need to update the voice manager immediately as the
+                            # speed will be used in the next speak() call
+                            print(f"TTS speed set to {speed}x")
+                        
+                        # Restore Whisper model
+                        if "whisper_model" in settings:
+                            whisper_model = settings.get("whisper_model", "tiny")
+                            self.voice_manager.set_whisper(whisper_model)
+                    except Exception as e:
+                        if self.debug_mode:
+                            print(f"Error restoring settings: {e}")
+                        # Continue loading even if settings restoration fails
                 
             elif isinstance(memory_data, list):
                 # Legacy format (just an array of messages)
@@ -521,11 +558,15 @@ class VoiceREPL(cmd.Cmd):
             
         except FileNotFoundError:
             print(f"File not found: {filename}")
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            if self.debug_mode:
+                print(f"Invalid JSON format in {filename}: {e}")
             print(f"Invalid JSON format in {filename}")
         except Exception as e:
             if self.debug_mode:
-                print(f"Error loading chat history: {e}")
+                print(f"Error loading chat history: {str(e)}")
+                import traceback
+                traceback.print_exc()
             print(f"Failed to load chat history from {filename}")
     
     def _reset_and_recalculate_tokens(self):

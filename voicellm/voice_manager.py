@@ -17,6 +17,7 @@ class VoiceManager:
             debug_mode: Enable debug logging
         """
         self.debug_mode = debug_mode
+        self.speed = 1.0
         
         # Initialize TTS engine
         self.tts_engine = TTSEngine(
@@ -117,20 +118,47 @@ class VoiceManager:
             True if listening, False otherwise
         """
         return self.voice_recognizer and self.voice_recognizer.is_running
-    
-    def change_whisper_model(self, model_name):
-        """Change Whisper model.
+        
+    def set_speed(self, speed):
+        """Set the TTS speed.
         
         Args:
-            model_name: New model name (tiny, base, etc.)
+            speed: Speech speed multiplier (0.5-2.0)
             
         Returns:
-            True if changed, False otherwise
+            True if successful
+        """
+        self.speed = speed
+        return True
+    
+    def get_speed(self):
+        """Get the TTS speed.
+        
+        Returns:
+            Current TTS speed multiplier
+        """
+        return self.speed
+
+    def set_whisper(self, model_name):
+        """Set the Whisper model.
+        
+        Args:
+            whisper_model: Whisper model name (tiny, base, etc.)
+            
+        Returns:
+            True if successful
         """
         self.whisper_model = model_name
         if self.voice_recognizer:
             return self.voice_recognizer.change_whisper_model(model_name)
-        return True
+    
+    def get_whisper(self):
+        """Get the Whisper model.
+        
+        Returns:
+            Current Whisper model name
+        """
+        return self.whisper_model
     
     def change_vad_aggressiveness(self, aggressiveness):
         """Change VAD aggressiveness.
