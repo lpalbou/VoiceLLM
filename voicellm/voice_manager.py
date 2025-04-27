@@ -44,7 +44,13 @@ class VoiceManager:
         Returns:
             True if speech started, False otherwise
         """
-        return self.tts_engine.speak(text, speed, callback)
+        sp = 1.0
+        if speed != 1.0:
+            sp = speed
+        else:
+            sp = self.speed
+        
+        return self.tts_engine.speak(text, sp, callback)
     
     def stop_speaking(self):
         """Stop current speech playback.

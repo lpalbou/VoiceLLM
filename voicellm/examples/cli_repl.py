@@ -50,8 +50,6 @@ class VoiceREPL(cmd.Cmd):
         
         # Initialize voice manager
         self.voice_manager = VoiceManager(debug_mode=debug_mode)
-        self.voice_manager.set_speed(1.0)
-        self.voice_manager.set_whisper("tiny")
         
         # Settings
         self.use_tts = True
