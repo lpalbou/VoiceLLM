@@ -2,6 +2,15 @@
 
 All notable changes to the VoiceLLM project will be documented in this file.
 
+## [0.1.7] - 2024-04-27
+
+### Added
+- Added temperature parameter with default of 0.4
+- Added max_tokens parameter with default of 4096
+- Added CLI commands to adjust temperature and max_tokens
+- Updated memory file (.mem) format to store these new settings
+- Added command line arguments for temperature and max_tokens to voice_cli.py
+
 ## [0.1.6] - 2024-04-26
 
 ### Added

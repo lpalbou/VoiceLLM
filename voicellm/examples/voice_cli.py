@@ -23,6 +23,10 @@ def parse_args():
                       help="Start in text mode instead of voice mode")
     parser.add_argument("--system", 
                       help="Custom system prompt")
+    parser.add_argument("--temperature", type=float, default=0.4,
+                      help="Set temperature (0.0-2.0) for the LLM")
+    parser.add_argument("--max-tokens", type=int, default=4096,
+                      help="Set maximum tokens for the LLM response")
     return parser.parse_args()
 
 def main():
@@ -47,9 +51,16 @@ def main():
             if args.debug:
                 print(f"System prompt set to: {args.system}")
         
+        # Set temperature and max_tokens
+        repl.temperature = args.temperature
+        repl.max_tokens = args.max_tokens
+        if args.debug:
+            print(f"Temperature: {args.temperature}")
+            print(f"Max tokens: {args.max_tokens}")
+        
         # Change Whisper model if specified
         if args.whisper and args.whisper != "tiny":
-            if repl.voice_manager.change_whisper_model(args.whisper):
+            if repl.voice_manager.set_whisper(args.whisper):
                 if args.debug:
                     print(f"Using Whisper model: {args.whisper}")
         

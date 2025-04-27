@@ -47,6 +47,8 @@ class VoiceREPL(cmd.Cmd):
         # API settings
         self.api_url = api_url
         self.model = model
+        self.temperature = 0.4
+        self.max_tokens = 4096
         
         # Initialize voice manager
         self.voice_manager = VoiceManager(debug_mode=debug_mode)
@@ -110,6 +112,18 @@ class VoiceREPL(cmd.Cmd):
             parts = line.strip().split(" ", 1)
             if len(parts) == 2:
                 return self.do_model(parts[1])
+                
+        # Handle the temperature command (temperature value)
+        if line.strip().lower().startswith("temperature "):
+            parts = line.strip().split(" ", 1)
+            if len(parts) == 2:
+                return self.do_temperature(parts[1])
+                
+        # Handle the max_tokens command (max_tokens value)
+        if line.strip().lower().startswith("max_tokens "):
+            parts = line.strip().split(" ", 1)
+            if len(parts) == 2:
+                return self.do_max_tokens(parts[1])
         
         if self.voice_mode:
             if self.debug_mode:
@@ -138,7 +152,9 @@ class VoiceREPL(cmd.Cmd):
             payload = {
                 "model": self.model,
                 "messages": self.messages,
-                "stream": False  # Disable streaming for simplicity
+                "stream": False,  # Disable streaming for simplicity
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens
             }
             
             # Make API request
@@ -400,6 +416,8 @@ class VoiceREPL(cmd.Cmd):
         print("  save <filename>    Save chat history to file")
         print("  load <filename>    Load chat history from file")
         print("  model <model_name> Change the LLM model")
+        print("  temperature <val>  Set temperature (0.0-2.0)")
+        print("  max_tokens <num>   Set max tokens (default 4096)")
         print("  tokens             Display token usage stats")
         print("  stop               Stop voice mode or TTS playback")
         print("  <message>          Send to LLM (text mode)")
@@ -454,7 +472,9 @@ class VoiceREPL(cmd.Cmd):
                 },
                 "settings": {
                     "tts_speed": self.voice_manager.get_speed(),
-                    "whisper_model": self.voice_manager.get_whisper()
+                    "whisper_model": self.voice_manager.get_whisper(),
+                    "temperature": self.temperature,
+                    "max_tokens": self.max_tokens
                 },
                 "messages": self.messages
             }
@@ -537,6 +557,19 @@ class VoiceREPL(cmd.Cmd):
                         if "whisper_model" in settings:
                             whisper_model = settings.get("whisper_model", "tiny")
                             self.voice_manager.set_whisper(whisper_model)
+                            
+                        # Restore temperature
+                        if "temperature" in settings:
+                            temp = settings.get("temperature", 0.4)
+                            self.temperature = temp
+                            print(f"Temperature set to {temp}")
+                            
+                        # Restore max_tokens
+                        if "max_tokens" in settings:
+                            tokens = settings.get("max_tokens", 4096)
+                            self.max_tokens = tokens
+                            print(f"Max tokens set to {tokens}")
+                            
                     except Exception as e:
                         if self.debug_mode:
                             print(f"Error restoring settings: {e}")
@@ -611,6 +644,40 @@ class VoiceREPL(cmd.Cmd):
         
         # Don't add a system message about model change
 
+    def do_temperature(self, arg):
+        """Set the temperature parameter for the LLM."""
+        if not arg.strip():
+            print(f"Current temperature: {self.temperature}")
+            return
+            
+        try:
+            temp = float(arg.strip())
+            if 0.0 <= temp <= 2.0:
+                old_temp = self.temperature
+                self.temperature = temp
+                print(f"Temperature changed from {old_temp} to {temp}")
+            else:
+                print("Temperature should be between 0.0 and 2.0")
+        except ValueError:
+            print("Usage: temperature <number>  (e.g., temperature 0.7)")
+    
+    def do_max_tokens(self, arg):
+        """Set the max_tokens parameter for the LLM."""
+        if not arg.strip():
+            print(f"Current max_tokens: {self.max_tokens}")
+            return
+            
+        try:
+            tokens = int(arg.strip())
+            if tokens > 0:
+                old_tokens = self.max_tokens
+                self.max_tokens = tokens
+                print(f"Max tokens changed from {old_tokens} to {tokens}")
+            else:
+                print("Max tokens should be a positive integer")
+        except ValueError:
+            print("Usage: max_tokens <number>  (e.g., max_tokens 2048)")
+        
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="VoiceLLM CLI Example")
