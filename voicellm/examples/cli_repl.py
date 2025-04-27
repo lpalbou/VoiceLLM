@@ -436,7 +436,7 @@ class VoiceREPL(cmd.Cmd):
                 "header": {
                     "timestamp_utc": self._get_current_timestamp(),
                     "model": self.model,
-                    "version": "0.1.4"  # This should be dynamically determined in a production app
+                    "version": __import__('voicellm').__version__  # Get version from package __init__.py
                 },
                 "system_prompt": self.system_prompt,
                 "token_stats": {
@@ -602,11 +602,7 @@ class VoiceREPL(cmd.Cmd):
         self.model = model_name
         print(f"Model changed from {old_model} to {model_name}")
         
-        # Optionally add a system message indicating the model change
-        self.messages.append({
-            "role": "system", 
-            "content": f"[Model changed from {old_model} to {model_name}]"
-        })
+        # Don't add a system message about model change
 
 def parse_args():
     """Parse command line arguments."""
