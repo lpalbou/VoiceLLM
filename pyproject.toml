@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voicellm"
-version = "0.1.7"
+version = "0.1.8"
 description = "A modular Python library for voice interactions with AI systems"
 readme = "README.md"
 requires-python = ">=3.11.7"
@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
     "numpy>=1.24.0",
@@ -27,7 +28,7 @@ dependencies = [
     "webrtcvad>=2.0.10",
     "PyAudio>=0.2.13",
     "openai-whisper>=20230314",
-    "TTS>=0.21.0",
+    "coqui-tts>=0.27.0",
     "torch>=2.0.0",
     "torchaudio>=2.0.0",
     "soundfile>=0.12.1",
