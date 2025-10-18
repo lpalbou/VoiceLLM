@@ -1,4 +1,11 @@
-"""TTS Engine for high-quality speech synthesis with interrupt handling."""
+"""TTS Engine for high-quality speech synthesis with interrupt handling.
+
+This module implements best practices for TTS synthesis including:
+- Sentence segmentation for long text (prevents attention degradation)
+- Text chunking for extremely long content
+- Text preprocessing and normalization
+- Robust error handling
+"""
 
 import threading
 import time
@@ -8,6 +15,7 @@ import os
 import sys
 import logging
 import warnings
+import re
 from TTS.api import TTS
 
 # Suppress the PyTorch FutureWarning about torch.load
@@ -17,18 +25,116 @@ warnings.filterwarnings(
     category=FutureWarning
 )
 
+def preprocess_text(text):
+    """Preprocess text for better TTS synthesis.
+    
+    This function normalizes text to prevent synthesis errors:
+    - Removes excessive whitespace
+    - Normalizes punctuation
+    - Handles common abbreviations
+    - Removes problematic characters
+    
+    Args:
+        text: Input text string
+        
+    Returns:
+        Cleaned and normalized text
+    """
+    if not text:
+        return text
+    
+    # Remove excessive whitespace
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Normalize ellipsis
+    text = text.replace('...', '.')
+    
+    # Remove or normalize problematic characters
+    # Keep basic punctuation that helps with prosody
+    text = re.sub(r'[^\w\s.,!?;:\-\'"()]', '', text)
+    
+    # Ensure proper spacing after punctuation
+    text = re.sub(r'([.,!?;:])([^\s])', r'\1 \2', text)
+    
+    return text.strip()
+
+
+def chunk_long_text(text, max_chunk_size=300):
+    """Split very long text into manageable chunks at natural boundaries.
+    
+    For extremely long texts, this function splits at paragraph or sentence
+    boundaries to prevent memory issues and attention degradation.
+    
+    Args:
+        text: Input text string
+        max_chunk_size: Maximum characters per chunk (default 300)
+        
+    Returns:
+        List of text chunks
+    """
+    if len(text) <= max_chunk_size:
+        return [text]
+    
+    chunks = []
+    
+    # First try to split by paragraphs
+    paragraphs = text.split('\n\n')
+    
+    current_chunk = ""
+    for para in paragraphs:
+        # If adding this paragraph would exceed limit and we have content
+        if len(current_chunk) + len(para) > max_chunk_size and current_chunk:
+            chunks.append(current_chunk.strip())
+            current_chunk = para
+        else:
+            if current_chunk:
+                current_chunk += "\n\n" + para
+            else:
+                current_chunk = para
+        
+        # If a single paragraph is too long, split by sentences
+        if len(current_chunk) > max_chunk_size:
+            # Split on sentence boundaries
+            sentences = re.split(r'([.!?]+\s+)', current_chunk)
+            temp_chunk = ""
+            
+            for i in range(0, len(sentences), 2):
+                sentence = sentences[i]
+                punct = sentences[i+1] if i+1 < len(sentences) else ""
+                
+                if len(temp_chunk) + len(sentence) + len(punct) > max_chunk_size and temp_chunk:
+                    chunks.append(temp_chunk.strip())
+                    temp_chunk = sentence + punct
+                else:
+                    temp_chunk += sentence + punct
+            
+            current_chunk = temp_chunk
+    
+    # Add remaining text
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    
+    return chunks if chunks else [text]
+
+
 class TTSEngine:
     """Text-to-speech engine with interrupt capability."""
     
-    def __init__(self, model_name="tts_models/en/ljspeech/tacotron2-DDC", debug_mode=False):
+    def __init__(self, model_name="tts_models/en/ljspeech/tacotron2-DDC", debug_mode=False, streaming=True):
         """Initialize the TTS engine.
         
         Args:
             model_name: TTS model to use
             debug_mode: Enable debug output
+            streaming: Enable streaming playback (start playing while synthesizing remaining chunks)
         """
         # Set up debug mode
         self.debug_mode = debug_mode
+        self.streaming = streaming
+        
+        # Callback to notify when TTS starts/stops (for pausing voice recognition)
+        self.on_playback_start = None
+        self.on_playback_end = None
         
         # Suppress TTS output unless in debug mode
         if not debug_mode:
@@ -63,9 +169,17 @@ class TTSEngine:
         self.stop_flag = threading.Event()
         self.playback_thread = None
         self.start_time = 0
+        self.audio_queue = []  # Queue for streaming playback
+        self.queue_lock = threading.Lock()  # Thread-safe queue access
     
     def speak(self, text, speed=1.0, callback=None):
         """Convert text to speech and play audio.
+        
+        Implements SOTA best practices for long text synthesis:
+        - Text preprocessing and normalization
+        - Intelligent chunking for very long text (>500 chars)
+        - Sentence segmentation to prevent attention degradation
+        - Seamless audio concatenation for chunks
         
         Args:
             text: Text to convert to speech
@@ -82,10 +196,21 @@ class TTSEngine:
             return False
         
         try:
+            # Preprocess text for better synthesis quality
+            processed_text = preprocess_text(text)
+            
             if self.debug_mode:
-                print(f" > Speaking: '{text}'")
+                print(f" > Speaking: '{processed_text[:100]}{'...' if len(processed_text) > 100 else ''}'")
+                print(f" > Text length: {len(processed_text)} chars")
                 if speed != 1.0:
                     print(f" > Using speed multiplier: {speed}x")
+            
+            # For very long text, chunk it at natural boundaries
+            # Use 300 chars to stay well within model's training distribution
+            text_chunks = chunk_long_text(processed_text, max_chunk_size=300)
+            
+            if self.debug_mode and len(text_chunks) > 1:
+                print(f" > Split into {len(text_chunks)} chunks for processing")
             
             # Redirect stdout for non-debug mode
             orig_stdout = None
@@ -96,11 +221,87 @@ class TTSEngine:
                 sys.stdout = null_out
             
             try:
-                audio = self.tts.tts(text)
-                if not audio:
+                # Choose synthesis strategy based on streaming mode
+                if self.streaming and len(text_chunks) > 1:
+                    # STREAMING MODE: Synthesize and play progressively
                     if self.debug_mode:
-                        print("TTS failed to generate audio.")
-                    return False
+                        sys.stdout = sys.__stdout__
+                        print(f" > Streaming mode: will start playback after first chunk")
+                        if not self.debug_mode:
+                            sys.stdout = null_out
+                    
+                    # Synthesize first chunk
+                    if self.debug_mode:
+                        sys.stdout = sys.__stdout__
+                        print(f" > Processing chunk 1/{len(text_chunks)} ({len(text_chunks[0])} chars)...")
+                        if not self.debug_mode:
+                            sys.stdout = null_out
+                    
+                    first_audio = self.tts.tts(text_chunks[0], split_sentences=True)
+                    
+                    if not first_audio:
+                        if self.debug_mode:
+                            sys.stdout = sys.__stdout__
+                            print("TTS failed to generate audio for first chunk.")
+                        return False
+                    
+                    if self.debug_mode:
+                        sys.stdout = sys.__stdout__
+                        print(f" > Chunk 1 generated {len(first_audio)} audio samples")
+                        print(f" > Starting playback while synthesizing remaining chunks...")
+                        if not self.debug_mode:
+                            sys.stdout = null_out
+                    
+                    # Initialize queue with first chunk
+                    with self.queue_lock:
+                        self.audio_queue = [first_audio]
+                    
+                    # Start playback thread (will play from queue)
+                    audio = None  # Will use queue instead
+                    
+                else:
+                    # NON-STREAMING MODE: Synthesize all chunks then play
+                    audio_chunks = []
+                    for i, chunk in enumerate(text_chunks):
+                        if self.debug_mode and len(text_chunks) > 1:
+                            sys.stdout = sys.__stdout__
+                            print(f" > Processing chunk {i+1}/{len(text_chunks)} ({len(chunk)} chars)...")
+                            if not self.debug_mode:
+                                sys.stdout = null_out
+                        
+                        # Use split_sentences=True (SOTA best practice)
+                        chunk_audio = self.tts.tts(chunk, split_sentences=True)
+                        
+                        if chunk_audio:
+                            audio_chunks.append(chunk_audio)
+                            if self.debug_mode and len(text_chunks) > 1:
+                                sys.stdout = sys.__stdout__
+                                print(f" > Chunk {i+1} generated {len(chunk_audio)} audio samples")
+                                if not self.debug_mode:
+                                    sys.stdout = null_out
+                        elif self.debug_mode:
+                            sys.stdout = sys.__stdout__
+                            print(f" > Warning: Chunk {i+1} failed to generate audio")
+                            if not self.debug_mode:
+                                sys.stdout = null_out
+                    
+                    if not audio_chunks:
+                        if self.debug_mode:
+                            sys.stdout = sys.__stdout__
+                            print("TTS failed to generate audio.")
+                        return False
+                    
+                    # Concatenate audio arrays
+                    if len(audio_chunks) == 1:
+                        audio = audio_chunks[0]
+                    else:
+                        audio = np.concatenate(audio_chunks)
+                        if self.debug_mode:
+                            sys.stdout = sys.__stdout__
+                            print(f" > Concatenated {len(audio_chunks)} chunks into {len(audio)} total audio samples")
+                            if not self.debug_mode:
+                                sys.stdout = null_out
+                
             finally:
                 # Restore stdout if we redirected it
                 if not self.debug_mode and orig_stdout:
@@ -110,26 +311,93 @@ class TTSEngine:
             
             def _audio_playback():
                 try:
-                    audio_array = np.array(audio)
+                    self.is_playing = True
+                    self.start_time = time.time()
                     
-                    # Apply speed adjustment if needed
+                    # Notify that playback is starting (to pause voice recognition)
+                    if self.on_playback_start:
+                        self.on_playback_start()
+                    
+                    # Determine playback rate
                     if speed != 1.0:
-                        # Adjust the sample rate to change speed
                         playback_rate = int(22050 * speed)
                     else:
                         playback_rate = 22050
                     
-                    self.is_playing = True
-                    self.start_time = time.time()
+                    # STREAMING MODE: Play from queue while synthesizing remaining chunks
+                    if audio is None:  # Streaming mode indicator
+                        # Start background thread to synthesize remaining chunks
+                        def _synthesize_remaining():
+                            for i in range(1, len(text_chunks)):
+                                if self.stop_flag.is_set():
+                                    break
+                                
+                                if self.debug_mode:
+                                    print(f" > [Background] Processing chunk {i+1}/{len(text_chunks)} ({len(text_chunks[i])} chars)...")
+                                
+                                try:
+                                    chunk_audio = self.tts.tts(text_chunks[i], split_sentences=True)
+                                    if chunk_audio:
+                                        with self.queue_lock:
+                                            self.audio_queue.append(chunk_audio)
+                                        if self.debug_mode:
+                                            print(f" > [Background] Chunk {i+1} generated {len(chunk_audio)} samples, added to queue")
+                                except Exception as e:
+                                    if self.debug_mode:
+                                        print(f" > [Background] Chunk {i+1} synthesis error: {e}")
+                        
+                        synthesis_thread = threading.Thread(target=_synthesize_remaining)
+                        synthesis_thread.daemon = True
+                        synthesis_thread.start()
+                        
+                        # Play chunks from queue as they become available
+                        chunks_played = 0
+                        while chunks_played < len(text_chunks) and not self.stop_flag.is_set():
+                            # Wait for next chunk to be available
+                            while True:
+                                with self.queue_lock:
+                                    if chunks_played < len(self.audio_queue):
+                                        chunk_to_play = self.audio_queue[chunks_played]
+                                        break
+                                if self.stop_flag.is_set():
+                                    break
+                                time.sleep(0.05)  # Short wait before checking again
+                            
+                            if self.stop_flag.is_set():
+                                break
+                            
+                            # Play this chunk
+                            audio_array = np.array(chunk_to_play)
+                            sd.play(audio_array, samplerate=playback_rate)
+                            
+                            # Wait for this chunk to finish
+                            while not self.stop_flag.is_set() and sd.get_stream().active:
+                                time.sleep(0.1)
+                            
+                            if self.stop_flag.is_set():
+                                sd.stop()
+                                break
+                            
+                            chunks_played += 1
+                        
+                        synthesis_thread.join(timeout=1.0)  # Wait for synthesis to complete
                     
-                    sd.play(audio_array, samplerate=playback_rate)
+                    else:
+                        # NON-STREAMING MODE: Play concatenated audio
+                        audio_array = np.array(audio)
+                        sd.play(audio_array, samplerate=playback_rate)
+                        
+                        # Wait for playback to complete or stop flag
+                        while not self.stop_flag.is_set() and sd.get_stream().active:
+                            time.sleep(0.1)
+                        
+                        sd.stop()
                     
-                    # Wait for playback to complete or stop flag
-                    while not self.stop_flag.is_set() and sd.get_stream().active:
-                        time.sleep(0.1)
-                    
-                    sd.stop()
                     self.is_playing = False
+                    
+                    # Notify that playback has ended (to resume voice recognition)
+                    if self.on_playback_end:
+                        self.on_playback_end()
                     
                     if self.debug_mode:
                         duration = time.time() - self.start_time
@@ -144,6 +412,9 @@ class TTSEngine:
                     if self.debug_mode:
                         print(f"Audio playback error: {e}")
                     self.is_playing = False
+                    # Ensure we notify end even on error
+                    if self.on_playback_end:
+                        self.on_playback_end()
             
             # Start playback in a separate thread
             self.stop_flag.clear()

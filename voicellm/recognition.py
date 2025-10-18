@@ -59,6 +59,7 @@ class VoiceRecognizer:
         self.pyaudio = None
         self.stream = None
         self.tts_interrupt_callback = None
+        self.tts_interrupt_enabled = True  # Can be disabled during TTS playback
     
     def start(self, tts_interrupt_callback=None):
         """Start voice recognition in a separate thread.
@@ -137,7 +138,9 @@ class VoiceRecognizer:
                     silence_count = 0
                     
                     # Trigger TTS interrupt callback if enough speech detected
+                    # Only interrupt if TTS interruption is enabled (not during TTS playback)
                     if (self.tts_interrupt_callback and 
+                        self.tts_interrupt_enabled and
                         speech_count >= self.min_speech_chunks and 
                         not recording):
                         self.tts_interrupt_callback()
@@ -210,4 +213,19 @@ class VoiceRecognizer:
         Returns:
             True if changed, False otherwise
         """
-        return self.voice_detector.set_aggressiveness(aggressiveness) 
+        return self.voice_detector.set_aggressiveness(aggressiveness)
+    
+    def pause_tts_interrupt(self):
+        """Temporarily disable TTS interruption (e.g., during TTS playback).
+        
+        This prevents the system from interrupting its own speech.
+        """
+        self.tts_interrupt_enabled = False
+        if self.debug_mode:
+            print(" > TTS interrupt paused")
+    
+    def resume_tts_interrupt(self):
+        """Re-enable TTS interruption after it was paused."""
+        self.tts_interrupt_enabled = True
+        if self.debug_mode:
+            print(" > TTS interrupt resumed") 

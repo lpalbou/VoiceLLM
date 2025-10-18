@@ -25,6 +25,11 @@ class VoiceManager:
             debug_mode=debug_mode
         )
         
+        # Set up callbacks to pause/resume voice recognition during TTS playback
+        # This prevents the system from interrupting its own speech
+        self.tts_engine.on_playback_start = self._on_tts_start
+        self.tts_engine.on_playback_end = self._on_tts_end
+        
         # Voice recognizer is initialized on demand
         self.voice_recognizer = None
         self.whisper_model = whisper_model
@@ -32,6 +37,16 @@ class VoiceManager:
         # State tracking
         self._transcription_callback = None
         self._stop_callback = None
+    
+    def _on_tts_start(self):
+        """Called when TTS playback starts - pause voice recognition interrupt."""
+        if self.voice_recognizer:
+            self.voice_recognizer.pause_tts_interrupt()
+    
+    def _on_tts_end(self):
+        """Called when TTS playback ends - resume voice recognition interrupt."""
+        if self.voice_recognizer:
+            self.voice_recognizer.resume_tts_interrupt()
     
     def speak(self, text, speed=1.0, callback=None):
         """Convert text to speech and play audio.

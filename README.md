@@ -123,6 +123,30 @@ voicellm-cli cli
 voicellm-cli cli --debug
 ```
 
+#### REPL Commands
+
+All commands must start with `/` except `stop`:
+
+- `/exit`, `/q`, `/quit` - Exit REPL
+- `/clear` - Clear conversation history
+- `/tts on|off` - Toggle text-to-speech
+- `/voice on|off` - Toggle voice input mode
+- `/speed <number>` - Set TTS speed (0.5-2.0)
+- `/whisper tiny|base` - Switch Whisper model
+- `/system <prompt>` - Set system prompt
+- `/stop` - Stop voice mode or TTS playback
+- `/tokens` - Display token usage statistics
+- `/help` - Show help information
+- `/save <filename>` - Save chat history
+- `/load <filename>` - Load chat history
+- `/model <name>` - Change LLM model
+- `/temperature <val>` - Set temperature (0.0-2.0)
+- `/max_tokens <num>` - Set max tokens
+- `stop` - Stop voice mode or TTS (voice command, no / needed)
+- `<message>` - Send message to LLM
+
+**Note**: Commands without `/` (except `stop`) are sent to the LLM as regular messages.
+
 ### Web API
 
 ```bash

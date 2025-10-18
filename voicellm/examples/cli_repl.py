@@ -76,60 +76,43 @@ class VoiceREPL(cmd.Cmd):
     def _count_system_tokens(self):
         """Count tokens in the system prompt."""
         self._count_tokens(self.system_prompt, "system")
+    
+    def parseline(self, line):
+        """Parse the line to extract command and arguments.
+        
+        Override to handle / prefix for commands. This ensures /voice, /help, etc.
+        are recognized as commands by stripping the leading / before parsing.
+        """
+        line = line.strip()
+        
+        # If line starts with /, remove it for command processing
+        if line.startswith('/'):
+            line = line[1:].strip()
+        
+        # Call parent parseline to do the actual parsing
+        return super().parseline(line)
         
     def default(self, line):
-        """Handle regular text input."""
+        """Handle regular text input.
+        
+        Only 'stop' is recognized as a command without /
+        All other commands MUST use / prefix.
+        """
         # Skip empty lines
         if not line.strip():
             return
-            
-        # Handle commands without the / prefix
-        if line.strip().lower() == "help":
-            return self.do_help("")
         
-        # Handle the stop command directly
+        # ONLY 'stop' is recognized without / (for voice mode convenience)
         if line.strip().lower() == "stop":
             return self.do_stop("")
         
-        # Handle the tokens command directly
-        if line.strip().lower() == "tokens":
-            return self.do_tokens("")
-            
-        # Handle the save command (save filename)
-        if line.strip().lower().startswith("save "):
-            parts = line.strip().split(" ", 1)
-            if len(parts) == 2:
-                return self.do_save(parts[1])
-                
-        # Handle the load command (load filename)
-        if line.strip().lower().startswith("load "):
-            parts = line.strip().split(" ", 1)
-            if len(parts) == 2:
-                return self.do_load(parts[1])
-                
-        # Handle the model command (model model_name)
-        if line.strip().lower().startswith("model "):
-            parts = line.strip().split(" ", 1)
-            if len(parts) == 2:
-                return self.do_model(parts[1])
-                
-        # Handle the temperature command (temperature value)
-        if line.strip().lower().startswith("temperature "):
-            parts = line.strip().split(" ", 1)
-            if len(parts) == 2:
-                return self.do_temperature(parts[1])
-                
-        # Handle the max_tokens command (max_tokens value)
-        if line.strip().lower().startswith("max_tokens "):
-            parts = line.strip().split(" ", 1)
-            if len(parts) == 2:
-                return self.do_max_tokens(parts[1])
-        
+        # Check if in voice mode - don't send to LLM
         if self.voice_mode:
             if self.debug_mode:
                 print("Voice mode active. Use /voice off or say 'stop' to exit.")
             return
-            
+        
+        # Everything else goes to LLM
         self.process_query(line.strip())
         
     def process_query(self, query):
@@ -384,6 +367,14 @@ class VoiceREPL(cmd.Cmd):
             print("Goodbye!")
         return True
     
+    def do_q(self, arg):
+        """Alias for exit."""
+        return self.do_exit(arg)
+    
+    def do_quit(self, arg):
+        """Alias for exit."""
+        return self.do_exit(arg)
+    
     def do_stop(self, arg):
         """Stop voice recognition or TTS playback."""
         # If in voice mode, exit voice mode
@@ -403,7 +394,7 @@ class VoiceREPL(cmd.Cmd):
     def do_help(self, arg):
         """Show help information."""
         print("Commands:")
-        print("  /exit              Exit REPL")
+        print("  /exit, /q, /quit   Exit REPL")
         print("  /clear             Clear history")
         print("  /tts on|off        Toggle TTS")
         print("  /voice on|off      Toggle voice input")
@@ -413,17 +404,16 @@ class VoiceREPL(cmd.Cmd):
         print("  /stop              Stop voice mode or TTS playback")
         print("  /tokens            Display token usage stats")
         print("  /help              Show this help")
-        print("  save <filename>    Save chat history to file")
-        print("  load <filename>    Load chat history from file")
-        print("  model <model_name> Change the LLM model")
-        print("  temperature <val>  Set temperature (0.0-2.0)")
-        print("  max_tokens <num>   Set max tokens (default 4096)")
-        print("  tokens             Display token usage stats")
-        print("  stop               Stop voice mode or TTS playback")
+        print("  /save <filename>   Save chat history to file")
+        print("  /load <filename>   Load chat history from file")
+        print("  /model <name>      Change the LLM model")
+        print("  /temperature <val> Set temperature (0.0-2.0)")
+        print("  /max_tokens <num>  Set max tokens (default 4096)")
+        print("  stop               Stop voice mode or TTS (voice command)")
         print("  <message>          Send to LLM (text mode)")
-        print("\nIn voice mode, say 'stop' to exit voice mode.")
-        print("You can also type 'stop' at any time to stop TTS playback.")
-        print("Type 'tokens' to show token usage statistics.")
+        print()
+        print("Note: ALL commands must start with / except 'stop'")
+        print("In voice mode, say 'stop' to exit voice mode.")
     
     def emptyline(self):
         """Handle empty line input."""
