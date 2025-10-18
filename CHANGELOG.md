@@ -6,11 +6,19 @@ All notable changes to the VoiceLLM project will be documented in this file.
 
 ### Added
 - **New Method**: `VoiceManager.set_tts_model()` - Change TTS model dynamically
-  - Switch between fast_pitch, glow-tts, tacotron2-DDC at runtime
+  - Switch between VITS, fast_pitch, glow-tts, tacotron2-DDC at runtime
   - No need to reinitialize VoiceManager
+  - Example: `vm.set_tts_model("tts_models/en/ljspeech/vits")`
 - **New REPL Command**: `/tts_model <model>` - Change TTS model from CLI
-  - Shortcuts: fast_pitch, glow-tts, tacotron2-DDC
-  - Example: `/tts_model glow-tts`
+  - Shortcuts: vits, fast_pitch, glow-tts, tacotron2-DDC
+  - Example: `/tts_model vits` or `/tts_model fast_pitch`
+- **Comprehensive Installation Guide** for espeak-ng
+  - macOS (Homebrew), Linux (apt/yum), Windows (conda/chocolatey/installer)
+  - Clear instructions in README for all platforms
+- **Automatic Model Selection** based on espeak-ng availability
+  - Automatically uses VITS if espeak-ng is installed (best quality)
+  - Gracefully falls back to fast_pitch if espeak-ng is missing
+  - User-friendly message with installation instructions on fallback
 
 ### Fixed
 - **CRITICAL**: Fixed speed parameter affecting pitch - now uses librosa time-stretching
@@ -18,19 +26,44 @@ All notable changes to the VoiceLLM project will be documented in this file.
   - Proper time-stretching algorithm applied to all audio chunks
   - Speed parameter now works as expected: 1.2x = 20% faster with same pitch
   - Works with both `speak(speed=X)` and `set_speed(X)` methods
+  - Range: 0.5x (half speed) to 2.0x (double speed)
+- **Fixed**: Silenced coqpit deserialization warnings (Type mismatch in FastPitchConfig)
+  - No more technical warnings during startup
+  - Clean user experience
 
 ### Changed
 - **Changed default TTS model to VITS (best quality, with auto-fallback)**
-  - VITS provides significantly better voice quality than other models
-  - Requires espeak-ng (easy to install on all platforms)
+  - VITS provides significantly better voice quality than fast_pitch/glow-tts/tacotron2
+  - Uses phoneme-based synthesis for natural prosody and intonation
+  - Requires espeak-ng (available via package managers on all platforms)
   - Automatic fallback to fast_pitch if espeak-ng not found
-  - Clear installation instructions for macOS, Linux, and Windows
-- **Honest about voice quality trade-offs:**
-  - VITS (best): Natural prosody, requires espeak-ng
-  - fast_pitch/glow-tts: Lower quality but works everywhere
-  - Users can choose based on their needs
+  - Detection is automatic - no configuration needed
+- **Honest about voice quality trade-offs in all documentation:**
+  - VITS (best): Natural prosody, emotional expression, requires espeak-ng
+  - fast_pitch: Good quality, works everywhere, no dependencies
+  - glow-tts: Alternative fallback, similar to fast_pitch
+  - tacotron2-DDC: Legacy model, slower
+- **Updated all documentation** to reflect quality rankings and installation
 - Added `librosa>=0.10.0` dependency for audio time-stretching (pure Python)
 - Silenced pkg_resources deprecation warning from jieba dependency
+
+### Programmatic Usage
+```python
+from voicellm import VoiceManager
+
+# Automatic: Uses VITS if espeak-ng available, fast_pitch otherwise
+vm = VoiceManager()
+
+# Explicit: Force a specific model
+vm = VoiceManager(tts_model="tts_models/en/ljspeech/fast_pitch")
+
+# Dynamic: Change model at runtime
+vm.set_tts_model("tts_models/en/ljspeech/vits")
+
+# Speed control (pitch preserved)
+vm.set_speed(1.2)  # 20% faster
+vm.speak("Test", speed=1.5)  # 50% faster for this speech only
+```
 
 ## [0.1.8] - 2025-10-17
 

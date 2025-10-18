@@ -205,9 +205,10 @@ All commands must start with `/` except `stop`:
   - `ptt` - Push-to-talk mode (planned)
 - `/speed <number>` - Set TTS speed (0.5-2.0, default: 1.0, **pitch preserved**)
 - `/tts_model <model>` - Switch TTS model:
-  - `fast_pitch` - Default (fast, good quality)
-  - `glow-tts` - Alternative (similar quality)
-  - `tacotron2-DDC` - Legacy (slower, stable)
+  - `vits` - **Best quality** (requires espeak-ng)
+  - `fast_pitch` - Good quality (works everywhere)
+  - `glow-tts` - Alternative (similar quality to fast_pitch)
+  - `tacotron2-DDC` - Legacy (slower, lower quality)
 - `/whisper <model>` - Switch Whisper model (tiny|base|small|medium|large)
 - `/stop` - Stop voice mode or TTS playback
 
@@ -281,9 +282,15 @@ The main class that coordinates TTS and STT functionality:
 ```python
 from voicellm import VoiceManager
 
-# Initialize with default fast_pitch model
+# Simple initialization (automatic model selection)
+# - Uses VITS if espeak-ng is installed (best quality)
+# - Falls back to fast_pitch if espeak-ng is missing
+manager = VoiceManager()
+
+# Or specify a model explicitly
 manager = VoiceManager(
-    tts_model="tts_models/en/ljspeech/fast_pitch",  # Default
+    tts_model="tts_models/en/ljspeech/vits",  # Best quality (needs espeak-ng)
+    # tts_model="tts_models/en/ljspeech/fast_pitch",  # Good (works everywhere)
     whisper_model="tiny",
     debug_mode=False
 )
@@ -471,9 +478,221 @@ for model in ["fast_pitch", "glow-tts", "tacotron2-DDC"]:
             time.sleep(0.1)
 ```
 
+## Integration Guide for Third-Party Applications
+
+VoiceLLM is designed as a lightweight, modular library for easy integration into your applications. This guide covers everything you need to know.
+
+### Quick Start: Basic Integration
+
+```python
+from voicellm import VoiceManager
+
+# 1. Initialize (automatic best-quality model selection)
+vm = VoiceManager()
+
+# 2. Text-to-Speech
+vm.speak("Hello from my app!")
+
+# 3. Speech-to-Text with callback
+def handle_speech(text):
+    print(f"User said: {text}")
+    # Process text in your app...
+
+vm.listen(on_transcription=handle_speech)
+```
+
+### Model Selection: Automatic vs Explicit
+
+**Automatic (Recommended):**
+```python
+# Automatically uses best available model
+vm = VoiceManager()
+# → Uses VITS if espeak-ng installed (best quality)
+# → Falls back to fast_pitch if espeak-ng missing
+```
+
+**Explicit:**
+```python
+# Force a specific model (bypasses auto-detection)
+vm = VoiceManager(tts_model="tts_models/en/ljspeech/fast_pitch")
+
+# Or change dynamically at runtime
+vm.set_tts_model("tts_models/en/ljspeech/vits")
+```
+
+### Voice Quality Levels
+
+| Model | Quality | Speed | Requirements |
+|-------|---------|-------|--------------|
+| **vits** | ⭐⭐⭐⭐⭐ Excellent | Fast | espeak-ng |
+| **fast_pitch** | ⭐⭐⭐ Good | Fast | None |
+| **glow-tts** | ⭐⭐⭐ Good | Fast | None |
+| **tacotron2-DDC** | ⭐⭐ Fair | Slow | None |
+
+### Customization Options
+
+```python
+from voicellm import VoiceManager
+
+vm = VoiceManager(
+    # TTS Configuration
+    tts_model="tts_models/en/ljspeech/vits",  # Model to use
+    
+    # STT Configuration  
+    whisper_model="base",  # tiny, base, small, medium, large
+    
+    # Debugging
+    debug_mode=True  # Enable detailed logging
+)
+
+# Runtime customization
+vm.set_speed(1.2)                    # Adjust TTS speed (0.5-2.0)
+vm.set_tts_model("...")              # Change TTS model
+vm.set_whisper("small")              # Change STT model
+vm.set_voice_mode("wait")            # wait, full, or off
+vm.change_vad_aggressiveness(2)      # VAD sensitivity (0-3)
+```
+
+### Integration Patterns
+
+#### Pattern 1: TTS Only (No Voice Input)
+```python
+vm = VoiceManager()
+
+# Speak with different speeds
+vm.speak("Normal speed")
+vm.speak("Fast speech", speed=1.5)
+vm.speak("Slow speech", speed=0.7)
+
+# Control playback
+if vm.is_speaking():
+    vm.stop_speaking()
+```
+
+#### Pattern 2: STT Only (No Text-to-Speech)
+```python
+vm = VoiceManager()
+
+def process_speech(text):
+    # Send to your backend, save to DB, etc.
+    your_app.process(text)
+
+vm.listen(on_transcription=process_speech)
+```
+
+#### Pattern 3: Full Voice Interaction
+```python
+vm = VoiceManager()
+
+def on_speech(text):
+    response = your_llm.generate(text)
+    vm.speak(response)
+
+def on_stop():
+    print("User said stop")
+    vm.cleanup()
+
+vm.listen(
+    on_transcription=on_speech,
+    on_stop=on_stop
+)
+```
+
+### Error Handling
+
+```python
+try:
+    vm = VoiceManager()
+    vm.speak("Test")
+except Exception as e:
+    print(f"TTS Error: {e}")
+    # Handle missing dependencies, etc.
+
+# Check model availability
+try:
+    vm.set_tts_model("tts_models/en/ljspeech/vits")
+    print("VITS available")
+except:
+    print("VITS not available, using fallback")
+    vm.set_tts_model("tts_models/en/ljspeech/fast_pitch")
+```
+
+### Threading and Async Support
+
+VoiceLLM handles threading internally for TTS and STT:
+
+```python
+# TTS is non-blocking
+vm.speak("Long text...")  # Returns immediately
+# Your code continues while speech plays
+
+# Check status
+if vm.is_speaking():
+    print("Still speaking...")
+
+# Wait for completion
+while vm.is_speaking():
+    time.sleep(0.1)
+
+# STT runs in background thread
+vm.listen(on_transcription=callback)  # Returns immediately
+# Callbacks fire on background thread
+```
+
+### Cleanup and Resource Management
+
+```python
+# Always cleanup when done
+vm.cleanup()
+
+# Or use context manager pattern
+from contextlib import contextmanager
+
+@contextmanager
+def voice_manager():
+    vm = VoiceManager()
+    try:
+        yield vm
+    finally:
+        vm.cleanup()
+
+# Usage
+with voice_manager() as vm:
+    vm.speak("Hello")
+```
+
+### Configuration for Different Environments
+
+**Development (fast iteration):**
+```python
+vm = VoiceManager(
+    tts_model="tts_models/en/ljspeech/fast_pitch",  # Fast
+    whisper_model="tiny",  # Fast STT
+    debug_mode=True
+)
+```
+
+**Production (best quality):**
+```python
+vm = VoiceManager(
+    tts_model="tts_models/en/ljspeech/vits",  # Best quality
+    whisper_model="base",  # Good accuracy
+    debug_mode=False
+)
+```
+
+**Embedded/Resource-Constrained:**
+```python
+vm = VoiceManager(
+    tts_model="tts_models/en/ljspeech/fast_pitch",  # Lower memory
+    whisper_model="tiny",  # Smallest model
+    debug_mode=False
+)
+```
+
 ## Integration with Text Generation Systems
 
-VoiceLLM is designed to be a lightweight, modular library that you can easily integrate into your own applications. Here are examples for common use cases:
+VoiceLLM is designed to be a lightweight, modular library that you can easily integrate into your own applications. Here are complete examples for common use cases:
 
 ### Example 1: Voice-Enabled Chatbot with Ollama
 
