@@ -489,6 +489,60 @@ class VoiceREPL(cmd.Cmd):
             self.voice_manager.stop_speaking()
             # Do not show the "Stopped speech playback" message
             return
+    
+    def do_pause(self, arg):
+        """Pause current TTS playback.
+        
+        Usage: /pause
+        """
+        if self.voice_manager:
+            if self.voice_manager.pause_speaking():
+                print("TTS playback paused. Use /resume to continue.")
+            else:
+                print("No active TTS playback to pause.")
+        else:
+            print("Voice manager not initialized.")
+    
+    def _reset_terminal(self):
+        """Reset terminal state to prevent I/O blocking."""
+        import sys
+        import os
+        
+        try:
+            # Flush all output streams
+            sys.stdout.flush()
+            sys.stderr.flush()
+            
+            # Force terminal to reset input state
+            if hasattr(sys.stdin, 'flush'):
+                sys.stdin.flush()
+            
+            # On Unix-like systems, reset terminal
+            if os.name == 'posix':
+                os.system('stty sane 2>/dev/null')
+                
+        except Exception:
+            # Ignore errors in terminal reset
+            pass
+    
+    def do_resume(self, arg):
+        """Resume paused TTS playback.
+        
+        Usage: /resume
+        """
+        if self.voice_manager:
+            if self.voice_manager.is_paused():
+                result = self.voice_manager.resume_speaking()
+                if result:
+                    print("TTS playback resumed.")
+                else:
+                    print("TTS was paused but playback already completed.")
+                # Reset terminal after resume operation
+                self._reset_terminal()
+            else:
+                print("No paused TTS playback to resume.")
+        else:
+            print("Voice manager not initialized.")
             
         # If neither voice mode nor TTS is active - don't show any message
         pass
@@ -505,6 +559,8 @@ class VoiceREPL(cmd.Cmd):
         print("  /whisper <model>    Switch Whisper model: tiny|base|small|medium|large")
         print("  /system <prompt>    Set system prompt")
         print("  /stop               Stop voice mode or TTS playback")
+        print("  /pause              Pause current TTS playback")
+        print("  /resume             Resume paused TTS playback")
         print("  /tokens             Display token usage stats")
         print("  /help               Show this help")
         print("  /save <filename>    Save chat history to file")

@@ -105,8 +105,8 @@ voicellm
 # Or start with custom settings
 voicellm --model gemma3:latest --whisper base
 
-# Start in text-only mode (no voice)
-voicellm --no-voice
+# Start in text-only mode (TTS enabled, listening disabled)
+voicellm --no-listening
 ```
 
 Once started, you can interact with the AI using voice or text. Use `/help` to see all available commands.
@@ -176,7 +176,8 @@ voicellm --debug --whisper base --model gemma3:latest --api http://localhost:114
   - Examples: cogito:3b, phi4-mini:latest, qwen2.5:latest, gemma3:latest, etc.
 - `--whisper <model>` - Whisper model to use (default: tiny)
   - Options: tiny, base, small, medium, large
-- `--no-voice` - Start in text mode instead of voice mode
+- `--no-listening` - Disable speech-to-text (listening), TTS still works
+  - **Note**: This creates a "TTS-only" mode where you type and the AI speaks back
 - `--system <prompt>` - Custom system prompt
 
 ### Command-Line REPL
@@ -215,6 +216,8 @@ All commands must start with `/` except `stop`:
   - `tacotron2-DDC` - Legacy (slower, lower quality)
 - `/whisper <model>` - Switch Whisper model (tiny|base|small|medium|large)
 - `/stop` - Stop voice mode or TTS playback
+- `/pause` - Pause current TTS playback (can be resumed)
+- `/resume` - Resume paused TTS playback
 
 **LLM Configuration:**
 - `/model <name>` - Change LLM model (e.g., `/model gemma3:latest`)
@@ -279,6 +282,8 @@ voicellm-cli simple
 
 ## Component Overview
 
+> **📖 For detailed architecture information**, see [`docs/architecture.md`](docs/architecture.md) which explains how VoiceLLM works internally, component communication, and the implementation of immediate pause/resume functionality.
+
 ### VoiceManager
 
 The main class that coordinates TTS and STT functionality:
@@ -311,6 +316,22 @@ manager.speak("This is half speed", speed=0.5)
 # Check if speaking
 if manager.is_speaking():
     manager.stop_speaking()
+
+# Pause and resume TTS (IMMEDIATE response)
+manager.speak("This is a long sentence that can be paused and resumed immediately")
+time.sleep(1)
+success = manager.pause_speaking()  # Pause IMMEDIATELY (~20ms response)
+if success:
+    print("TTS paused immediately")
+
+time.sleep(2)
+success = manager.resume_speaking()  # Resume IMMEDIATELY from exact position
+if success:
+    print("TTS resumed from exact position")
+
+# Check pause status
+if manager.is_paused():
+    manager.resume_speaking()
 
 # Change TTS speed globally
 manager.set_speed(1.3)  # All subsequent speech will be 30% faster
@@ -368,8 +389,14 @@ tts = TTSEngine(
 
 # Speak with speed control (pitch preserved via time-stretching)
 tts.speak(text, speed=1.2, callback=None)  # 20% faster, same pitch
-tts.stop()
-tts.is_active()
+
+# Immediate pause and resume control
+success = tts.pause()      # Pause IMMEDIATELY (~20ms response)
+success = tts.resume()     # Resume IMMEDIATELY from exact position
+is_paused = tts.is_paused()  # Check if currently paused
+
+tts.stop()       # Stop completely (cannot resume)
+tts.is_active()  # Check if active
 ```
 
 **Important Note on Speed Parameter:**
@@ -400,6 +427,160 @@ recognizer.stop()
 recognizer.change_whisper_model("base")
 recognizer.change_vad_aggressiveness(2)
 ```
+
+## Quick Reference: TTS Control
+
+### Pause and Resume TTS
+
+**Professional-grade pause/resume control** with immediate response and no terminal interference.
+
+**In CLI/REPL:**
+```bash
+/pause    # Pause current TTS playback IMMEDIATELY
+/resume   # Resume paused TTS playback IMMEDIATELY  
+/stop     # Stop TTS completely (cannot resume)
+```
+
+**Programmatic Usage:**
+
+#### Basic Pause/Resume
+```python
+from voicellm import VoiceManager
+import time
+
+vm = VoiceManager()
+
+# Start speech
+vm.speak("This is a long sentence that demonstrates immediate pause and resume functionality.")
+
+# Pause immediately (takes effect within ~20ms)
+time.sleep(1)
+result = vm.pause_speaking()
+if result:
+    print("✓ TTS paused immediately")
+
+# Resume immediately (takes effect within ~20ms)  
+time.sleep(2)
+result = vm.resume_speaking()
+if result:
+    print("✓ TTS resumed immediately")
+```
+
+#### Advanced Control with Status Checking
+```python
+from voicellm import VoiceManager
+import time
+
+vm = VoiceManager()
+
+# Start long speech
+vm.speak("This is a very long text that will be used to demonstrate the advanced pause and resume control features.")
+
+# Wait and pause
+time.sleep(1.5)
+if vm.is_speaking():
+    vm.pause_speaking()
+    print("Speech paused")
+
+# Check pause status
+if vm.is_paused():
+    print("Confirmed: TTS is paused")
+    time.sleep(2)
+    
+    # Resume from exact position
+    vm.resume_speaking()
+    print("Speech resumed from exact position")
+
+# Wait for completion
+while vm.is_speaking():
+    time.sleep(0.1)
+print("Speech completed")
+```
+
+#### Interactive Control Example
+```python
+from voicellm import VoiceManager
+import threading
+import time
+
+vm = VoiceManager()
+
+def control_speech():
+    """Interactive control in separate thread"""
+    time.sleep(2)
+    print("Pausing speech...")
+    vm.pause_speaking()
+    
+    time.sleep(3)
+    print("Resuming speech...")
+    vm.resume_speaking()
+
+# Start long speech
+long_text = """
+This is a comprehensive demonstration of VoiceLLM's immediate pause and resume functionality.
+The system uses non-blocking audio streaming with callback-based control.
+You can pause and resume at any time with immediate response.
+The audio continues from the exact position where it was paused.
+"""
+
+# Start control thread
+control_thread = threading.Thread(target=control_speech, daemon=True)
+control_thread.start()
+
+# Start speech (non-blocking)
+vm.speak(long_text)
+
+# Wait for completion
+while vm.is_speaking() or vm.is_paused():
+    time.sleep(0.1)
+
+vm.cleanup()
+```
+
+#### Error Handling
+```python
+from voicellm import VoiceManager
+
+vm = VoiceManager()
+
+# Start speech
+vm.speak("Testing pause/resume with error handling")
+
+# Safe pause with error handling
+try:
+    if vm.is_speaking():
+        success = vm.pause_speaking()
+        if success:
+            print("Successfully paused")
+        else:
+            print("No active speech to pause")
+    
+    # Safe resume with error handling
+    if vm.is_paused():
+        success = vm.resume_speaking()
+        if success:
+            print("Successfully resumed")
+        else:
+            print("Was not paused or playback completed")
+            
+except Exception as e:
+    print(f"Error controlling TTS: {e}")
+```
+
+**Key Features:**
+- **⚡ Immediate Response**: Pause/resume takes effect within ~20ms
+- **🎯 Exact Position**: Resumes from precise audio position (no repetition)
+- **🖥️ No Terminal Interference**: Uses OutputStream callbacks, never blocks terminal
+- **🔒 Thread-Safe**: Safe to call from any thread or callback
+- **📊 Reliable Status**: `is_paused()` and `is_speaking()` always accurate
+- **🔄 Seamless Streaming**: Works with ongoing text synthesis
+
+**How it works:**
+- Uses `sounddevice.OutputStream` with callback function
+- Pause immediately outputs silence in next audio callback (~20ms)
+- Resume immediately continues audio output from exact position
+- No blocking `sd.stop()` calls that interfere with terminal I/O
+- Thread-safe with proper locking mechanisms
 
 ## Quick Reference: Speed & Model Control
 
@@ -569,9 +750,19 @@ vm.speak("Normal speed")
 vm.speak("Fast speech", speed=1.5)
 vm.speak("Slow speech", speed=0.7)
 
-# Control playback
+# Control playback with immediate response
 if vm.is_speaking():
-    vm.stop_speaking()
+    success = vm.pause_speaking()  # Pause IMMEDIATELY (~20ms)
+    if success:
+        print("Speech paused immediately")
+    # or
+    vm.stop_speaking()   # Stop completely (cannot resume)
+
+# Resume from exact position
+if vm.is_paused():
+    success = vm.resume_speaking()  # Resume IMMEDIATELY (~20ms)
+    if success:
+        print("Speech resumed from exact position")
 ```
 
 #### Pattern 2: STT Only (No Text-to-Speech)

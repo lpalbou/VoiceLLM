@@ -90,6 +90,32 @@ class VoiceManager:
         """
         return self.tts_engine.stop()
     
+    def pause_speaking(self):
+        """Pause current speech playback.
+        
+        Pauses at chunk boundaries in streaming mode. Can be resumed with resume_speaking().
+        
+        Returns:
+            True if paused, False if no playback was active
+        """
+        return self.tts_engine.pause()
+    
+    def resume_speaking(self):
+        """Resume paused speech playback.
+        
+        Returns:
+            True if resumed, False if not paused or no playback active
+        """
+        return self.tts_engine.resume()
+    
+    def is_paused(self):
+        """Check if TTS is currently paused.
+        
+        Returns:
+            True if paused, False otherwise
+        """
+        return self.tts_engine.is_paused()
+    
     def is_speaking(self):
         """Check if TTS is currently active.
         

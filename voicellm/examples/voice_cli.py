@@ -19,8 +19,8 @@ def parse_args():
                       help="LLM model name")
     parser.add_argument("--whisper", default="tiny",
                       help="Whisper model to use (tiny, base, small, medium, large)")
-    parser.add_argument("--no-voice", action="store_true",
-                      help="Start in text mode instead of voice mode")
+    parser.add_argument("--no-listening", action="store_true",
+                      help="Disable speech-to-text (listening), TTS still works")
     parser.add_argument("--system", 
                       help="Custom system prompt")
     parser.add_argument("--temperature", type=float, default=0.4,
@@ -64,8 +64,8 @@ def main():
                 if args.debug:
                     print(f"Using Whisper model: {args.whisper}")
         
-        # Start in voice mode automatically unless --no-voice is specified
-        if not args.no_voice:
+        # Start in voice mode automatically unless --no-listening is specified
+        if not args.no_listening:
             print("Activating voice mode. Say 'stop' to exit voice mode.")
             # Use the existing voice mode method
             repl.do_voice("on")
