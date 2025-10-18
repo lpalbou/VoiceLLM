@@ -60,6 +60,7 @@ class VoiceRecognizer:
         self.stream = None
         self.tts_interrupt_callback = None
         self.tts_interrupt_enabled = True  # Can be disabled during TTS playback
+        self.listening_paused = False  # Can be paused to completely stop processing audio
     
     def start(self, tts_interrupt_callback=None):
         """Start voice recognition in a separate thread.
@@ -126,6 +127,11 @@ class VoiceRecognizer:
         
         while self.is_running:
             try:
+                # If listening is paused, sleep briefly and skip processing
+                if self.listening_paused:
+                    time.sleep(0.1)
+                    continue
+                
                 # Read audio data
                 audio_data = self.stream.read(self.chunk_size, exception_on_overflow=False)
                 
@@ -228,4 +234,19 @@ class VoiceRecognizer:
         """Re-enable TTS interruption after it was paused."""
         self.tts_interrupt_enabled = True
         if self.debug_mode:
-            print(" > TTS interrupt resumed") 
+            print(" > TTS interrupt resumed")
+    
+    def pause_listening(self):
+        """Temporarily pause audio processing entirely (e.g., during TTS in 'wait' mode).
+        
+        This completely stops processing audio input while keeping the thread alive.
+        """
+        self.listening_paused = True
+        if self.debug_mode:
+            print(" > Listening paused")
+    
+    def resume_listening(self):
+        """Resume audio processing after it was paused."""
+        self.listening_paused = False
+        if self.debug_mode:
+            print(" > Listening resumed") 

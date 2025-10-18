@@ -52,6 +52,27 @@ pip install -r requirements.txt
 
 ## Quick Start
 
+### Using VoiceLLM from the Command Line
+
+The easiest way to get started is to use VoiceLLM directly from your shell:
+
+```bash
+# Start VoiceLLM in voice mode (TTS ON, STT ON)
+voicellm
+
+# Or start with custom settings
+voicellm --model gemma3:latest --whisper base
+
+# Start in text-only mode (no voice)
+voicellm --no-voice
+```
+
+Once started, you can interact with the AI using voice or text. Use `/help` to see all available commands.
+
+### Integrating VoiceLLM in Your Python Project
+
+Here's a simple example of how to integrate VoiceLLM into your own application:
+
 ```python
 from voicellm import VoiceManager
 import time
@@ -104,14 +125,15 @@ voicellm
 voicellm --debug --whisper base --model gemma3:latest --api http://localhost:11434/api/chat
 ```
 
-Command line options:
-- `--debug`: Enable debug mode with detailed logging
-- `--api`: URL of the Ollama API (default: http://localhost:11434/api/chat)
-- `--model`: Ollama model to use (default: granite3.3:2b)
-  - Other examples : cogito:3b, phi4-mini:latest, qwen2.5:latest, cogito:latest, gemma3:latest, etc.
-- `--whisper`: Whisper model to use (tiny, base, small, medium, large)
-- `--no-voice`: Start in text mode instead of voice mode
-- `--system`: Custom system prompt
+**Command line options:**
+- `--debug` - Enable debug mode with detailed logging
+- `--api <url>` - URL of the Ollama API (default: http://localhost:11434/api/chat)
+- `--model <name>` - Ollama model to use (default: granite3.3:2b)
+  - Examples: cogito:3b, phi4-mini:latest, qwen2.5:latest, gemma3:latest, etc.
+- `--whisper <model>` - Whisper model to use (default: tiny)
+  - Options: tiny, base, small, medium, large
+- `--no-voice` - Start in text mode instead of voice mode
+- `--system <prompt>` - Custom system prompt
 
 ### Command-Line REPL
 
@@ -127,23 +149,37 @@ voicellm-cli cli --debug
 
 All commands must start with `/` except `stop`:
 
+**Basic Commands:**
 - `/exit`, `/q`, `/quit` - Exit REPL
 - `/clear` - Clear conversation history
-- `/tts on|off` - Toggle text-to-speech
-- `/voice on|off` - Toggle voice input mode
-- `/speed <number>` - Set TTS speed (0.5-2.0)
-- `/whisper tiny|base` - Switch Whisper model
-- `/system <prompt>` - Set system prompt
-- `/stop` - Stop voice mode or TTS playback
-- `/tokens` - Display token usage statistics
 - `/help` - Show help information
-- `/save <filename>` - Save chat history
-- `/load <filename>` - Load chat history
-- `/model <name>` - Change LLM model
-- `/temperature <val>` - Set temperature (0.0-2.0)
-- `/max_tokens <num>` - Set max tokens
-- `stop` - Stop voice mode or TTS (voice command, no / needed)
-- `<message>` - Send message to LLM
+- `stop` - Stop voice mode or TTS (voice command, no `/` needed)
+
+**Voice & Audio:**
+- `/tts on|off` - Toggle text-to-speech
+- `/voice <mode>` - Voice input modes:
+  - `off` - Disable voice input
+  - `full` - Continuous listening, interrupts TTS on speech detection
+  - `wait` - Pause listening while speaking (recommended, reduces self-interruption)
+  - `stop` - Only stop on 'stop' keyword (planned)
+  - `ptt` - Push-to-talk mode (planned)
+- `/speed <number>` - Set TTS speed (0.5-2.0, default: 1.15)
+- `/whisper <model>` - Switch Whisper model (tiny|base|small|medium|large)
+- `/stop` - Stop voice mode or TTS playback
+
+**LLM Configuration:**
+- `/model <name>` - Change LLM model (e.g., `/model gemma3:latest`)
+- `/system <prompt>` - Set system prompt (e.g., `/system You are a helpful coding assistant`)
+- `/temperature <val>` - Set temperature (0.0-2.0, default: 0.7)
+- `/max_tokens <num>` - Set max tokens (default: 4096)
+
+**Chat Management:**
+- `/save <filename>` - Save chat history (e.g., `/save conversation`)
+- `/load <filename>` - Load chat history (e.g., `/load conversation`)
+- `/tokens` - Display token usage statistics
+
+**Sending Messages:**
+- `<message>` - Any text without `/` prefix is sent to the LLM
 
 **Note**: Commands without `/` (except `stop`) are sent to the LLM as regular messages.
 
@@ -259,16 +295,19 @@ recognizer.change_vad_aggressiveness(2)
 
 ## Integration with Text Generation Systems
 
-VoiceLLM is designed to be used with any text generation system:
+VoiceLLM is designed to be a lightweight, modular library that you can easily integrate into your own applications. Here are examples for common use cases:
+
+### Example 1: Voice-Enabled Chatbot with Ollama
 
 ```python
 from voicellm import VoiceManager
 import requests
+import time
 
 # Initialize voice manager
 voice_manager = VoiceManager()
 
-# Function to call text generation API
+# Function to call Ollama API
 def generate_text(prompt):
     response = requests.post("http://localhost:11434/api/chat", json={
         "model": "granite3.3:2b",
@@ -293,6 +332,138 @@ def on_transcription(text):
 
 # Start listening
 voice_manager.listen(on_transcription)
+
+# Keep running until interrupted
+try:
+    while voice_manager.is_listening():
+        time.sleep(0.1)
+except KeyboardInterrupt:
+    voice_manager.cleanup()
+```
+
+### Example 2: Voice-Enabled Assistant with OpenAI
+
+```python
+from voicellm import VoiceManager
+import openai
+import time
+
+# Initialize
+voice_manager = VoiceManager()
+openai.api_key = "your-api-key"
+
+def on_transcription(text):
+    print(f"User: {text}")
+    
+    # Get response from OpenAI
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": text}]
+    )
+    
+    ai_response = response.choices[0].message.content
+    print(f"AI: {ai_response}")
+    
+    # Speak the response
+    voice_manager.speak(ai_response)
+
+# Start voice interaction
+voice_manager.listen(on_transcription)
+
+# Keep running
+try:
+    while voice_manager.is_listening():
+        time.sleep(0.1)
+except KeyboardInterrupt:
+    voice_manager.cleanup()
+```
+
+### Example 3: Text-to-Speech Only (No Voice Input)
+
+```python
+from voicellm import VoiceManager
+import time
+
+# Initialize voice manager
+voice_manager = VoiceManager()
+
+# Simple text-to-speech
+voice_manager.speak("Hello! This is a test of the text to speech system.")
+
+# Wait for speech to finish
+while voice_manager.is_speaking():
+    time.sleep(0.1)
+
+# Adjust speed
+voice_manager.set_speed(1.5)
+voice_manager.speak("This speech is 50% faster.")
+
+while voice_manager.is_speaking():
+    time.sleep(0.1)
+
+# Cleanup
+voice_manager.cleanup()
+```
+
+### Example 4: Speech-to-Text Only (No TTS)
+
+```python
+from voicellm import VoiceManager
+import time
+
+voice_manager = VoiceManager()
+
+def on_transcription(text):
+    print(f"Transcribed: {text}")
+    # Do something with the transcribed text
+    # e.g., save to file, send to API, etc.
+
+# Start listening
+voice_manager.listen(on_transcription)
+
+# Keep running
+try:
+    while voice_manager.is_listening():
+        time.sleep(0.1)
+except KeyboardInterrupt:
+    voice_manager.cleanup()
+```
+
+### Key Integration Points
+
+**VoiceManager Configuration:**
+```python
+# Full configuration example
+voice_manager = VoiceManager(
+    tts_model="tts_models/en/ljspeech/tacotron2-DDC",  # TTS model
+    whisper_model="base",  # Whisper STT model (tiny, base, small, medium, large)
+    debug_mode=True  # Enable debug logging
+)
+
+# Set voice mode (full, wait, off)
+voice_manager.set_voice_mode("wait")  # Recommended to avoid self-interruption
+
+# Adjust settings
+voice_manager.set_speed(1.15)  # TTS speed (default is 1.15)
+voice_manager.change_vad_aggressiveness(2)  # VAD sensitivity (0-3)
+```
+
+**Callback Functions:**
+```python
+def on_transcription(text):
+    """Called when speech is transcribed"""
+    print(f"User said: {text}")
+    # Your custom logic here
+
+def on_stop():
+    """Called when user says 'stop'"""
+    print("Stopping voice mode")
+    # Your cleanup logic here
+
+voice_manager.listen(
+    on_transcription=on_transcription,
+    on_stop=on_stop
+)
 ```
 
 ## Perspectives

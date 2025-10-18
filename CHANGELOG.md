@@ -26,6 +26,13 @@ All notable changes to the VoiceLLM project will be documented in this file.
 - Added Python 3.12 classifier to pyproject.toml to indicate official support
 
 ### Added
+- **Startup Help Display**: REPL now shows quick start guide on launch with API info and basic commands
+- **Voice Mode Options**: Enhanced `/voice` command with multiple modes
+  - `off` - Disable voice input
+  - `full` - Continuous listening with interrupt on speech detection
+  - `wait` - Pause listening during TTS playback (recommended, reduces self-interruption)
+  - `stop` - Only stop on 'stop' keyword (planned feature)
+  - `ptt` - Push-to-talk mode (planned feature)
 - **Streaming Playback** (ENABLED BY DEFAULT): Progressive audio playback for multi-chunk synthesis
   - Starts playing first chunk immediately while synthesizing remaining chunks
   - Reduces perceived latency by ~40% for long text

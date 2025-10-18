@@ -30,7 +30,7 @@ class Colors:
 class VoiceREPL(cmd.Cmd):
     """Voice-enabled REPL for LLM interaction."""
     
-    intro = "Welcome to VoiceLLM CLI REPL. Type message, use /voice, or /help.\n"
+    intro = ""  # Will be set in __init__ to include help
     prompt = f"{Colors.GREEN}> {Colors.END}"
     
     # Override cmd module settings
@@ -55,7 +55,8 @@ class VoiceREPL(cmd.Cmd):
         
         # Settings
         self.use_tts = True
-        self.voice_mode = False
+        self.voice_mode = "off"  # off, full, wait, stop, ptt
+        self.voice_mode_active = False  # Is voice recognition running?
         
         # System prompt
         self.system_prompt = "Be a helpful and concise AI assistant."
@@ -72,6 +73,20 @@ class VoiceREPL(cmd.Cmd):
         if self.debug_mode:
             print(f"Initialized with API URL: {api_url}")
             print(f"Using model: {model}")
+        
+        # Set intro with help information
+        self.intro = self._get_intro()
+        
+    def _get_intro(self):
+        """Generate intro message with help."""
+        intro = f"\n{Colors.BOLD}Welcome to VoiceLLM CLI REPL{Colors.END}\n"
+        intro += f"API: {self.api_url} | Model: {self.model}\n"
+        intro += f"\n{Colors.CYAN}Quick Start:{Colors.END}\n"
+        intro += "  • Type messages to chat with the LLM\n"
+        intro += "  • Use /voice <mode> to enable voice input\n"
+        intro += "  • Type /help for full command list\n"
+        intro += "  • Type /exit or /q to quit\n"
+        return intro
         
     def _count_system_tokens(self):
         """Count tokens in the system prompt."""
@@ -107,9 +122,9 @@ class VoiceREPL(cmd.Cmd):
             return self.do_stop("")
         
         # Check if in voice mode - don't send to LLM
-        if self.voice_mode:
+        if self.voice_mode_active:
             if self.debug_mode:
-                print("Voice mode active. Use /voice off or say 'stop' to exit.")
+                print(f"Voice mode active ({self.voice_mode}). Use /voice off or say 'stop' to exit.")
             return
         
         # Everything else goes to LLM
@@ -262,12 +277,35 @@ class VoiceREPL(cmd.Cmd):
         return text.strip()
     
     def do_voice(self, arg):
-        """Toggle voice input mode."""
+        """Control voice input mode.
+        
+        Modes:
+          off  - Disable voice input
+          full - Continuous listening, interrupts TTS on speech detection
+          wait - Pause listening while TTS is speaking (recommended)
+          stop - Only stops TTS on 'stop' keyword (planned)
+          ptt  - Push-to-talk mode (planned)
+        """
         arg = arg.lower().strip()
         
+        # Handle legacy "on" argument
         if arg == "on":
-            if not self.voice_mode:
-                self.voice_mode = True
+            arg = "wait"
+        
+        if arg in ["off", "full", "wait", "stop", "ptt"]:
+            # If switching from one mode to another, stop current mode first
+            if self.voice_mode_active and arg != "off":
+                self._voice_stop_callback()
+            
+            self.voice_mode = arg
+            self.voice_manager.set_voice_mode(arg)
+            
+            if arg == "off":
+                if self.voice_mode_active:
+                    self._voice_stop_callback()
+            else:
+                # Start voice recognition for non-off modes
+                self.voice_mode_active = True
                 
                 # Start listening with callbacks
                 self.voice_manager.listen(
@@ -275,12 +313,26 @@ class VoiceREPL(cmd.Cmd):
                     on_stop=lambda: self._voice_stop_callback()
                 )
                 
-                print("Voice mode enabled. Say 'stop' to exit.")
-        elif arg == "off":
-            if self.voice_mode:
-                self._voice_stop_callback()
+                # Print mode-specific instructions
+                if arg == "full":
+                    print("Voice mode: FULL - Continuous listening, interrupts TTS on speech.")
+                    print("Say 'stop' to exit.")
+                elif arg == "wait":
+                    print("Voice mode: WAIT - Pauses listening while speaking (recommended).")
+                    print("Say 'stop' to exit.")
+                elif arg == "stop":
+                    print("Voice mode: STOP (Planned) - Only stops TTS on 'stop' keyword.")
+                    print("Currently same as WAIT mode.")
+                elif arg == "ptt":
+                    print("Voice mode: PTT (Planned) - Push-to-talk functionality.")
+                    print("Currently same as WAIT mode.")
         else:
-            print("Usage: /voice on | off")
+            print("Usage: /voice off | full | wait | stop | ptt")
+            print("  off  - Disable voice input")
+            print("  full - Continuous listening, interrupts TTS on speech")
+            print("  wait - Pause listening while speaking (recommended)")
+            print("  stop - Only stop TTS on 'stop' keyword (planned)")
+            print("  ptt  - Push-to-talk mode (planned)")
     
     def _voice_callback(self, text):
         """Callback for voice recognition."""
@@ -292,13 +344,24 @@ class VoiceREPL(cmd.Cmd):
             self._voice_stop_callback()
             # Don't process "stop" as a query
             return
-            
+        
+        # Mode-specific handling
+        if self.voice_mode == "stop":
+            # In 'stop' mode, don't interrupt TTS - just queue the message
+            # But since we're in callback, TTS interrupt is already paused
+            pass
+        elif self.voice_mode == "ptt":
+            # In PTT mode, process immediately
+            pass
+        # 'full' mode has default behavior
+        
         # Process the user's query
         self.process_query(text)
     
     def _voice_stop_callback(self):
         """Callback when voice mode is stopped."""
-        self.voice_mode = False
+        self.voice_mode = "off"
+        self.voice_mode_active = False
         self.voice_manager.stop_listening()
         print("Voice mode disabled.")
     
@@ -378,7 +441,7 @@ class VoiceREPL(cmd.Cmd):
     def do_stop(self, arg):
         """Stop voice recognition or TTS playback."""
         # If in voice mode, exit voice mode
-        if self.voice_mode:
+        if self.voice_mode_active:
             self._voice_stop_callback()
             return
             
@@ -397,9 +460,9 @@ class VoiceREPL(cmd.Cmd):
         print("  /exit, /q, /quit   Exit REPL")
         print("  /clear             Clear history")
         print("  /tts on|off        Toggle TTS")
-        print("  /voice on|off      Toggle voice input")
-        print("  /speed <number>    Set TTS speed (0.5-2.0)")
-        print("  /whisper tiny|base Switch Whisper model")
+        print("  /voice <mode>      Voice input: off|full|wait|stop|ptt")
+        print("  /speed <number>    Set TTS speed (0.5-2.0, default: 1.15)")
+        print("  /whisper <model>   Switch Whisper model: tiny|base|small|medium|large")
         print("  /system <prompt>   Set system prompt")
         print("  /stop              Stop voice mode or TTS playback")
         print("  /tokens            Display token usage stats")
@@ -407,8 +470,8 @@ class VoiceREPL(cmd.Cmd):
         print("  /save <filename>   Save chat history to file")
         print("  /load <filename>   Load chat history from file")
         print("  /model <name>      Change the LLM model")
-        print("  /temperature <val> Set temperature (0.0-2.0)")
-        print("  /max_tokens <num>  Set max tokens (default 4096)")
+        print("  /temperature <val> Set temperature (0.0-2.0, default: 0.7)")
+        print("  /max_tokens <num>  Set max tokens (default: 4096)")
         print("  stop               Stop voice mode or TTS (voice command)")
         print("  <message>          Send to LLM (text mode)")
         print()

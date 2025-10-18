@@ -17,7 +17,7 @@ class VoiceManager:
             debug_mode: Enable debug logging
         """
         self.debug_mode = debug_mode
-        self.speed = 1.0
+        self.speed = 1.15  # 15% faster than default for better user experience
         
         # Initialize TTS engine
         self.tts_engine = TTSEngine(
@@ -37,16 +37,31 @@ class VoiceManager:
         # State tracking
         self._transcription_callback = None
         self._stop_callback = None
+        self._voice_mode = "full"  # full, wait, stop, ptt
     
     def _on_tts_start(self):
-        """Called when TTS playback starts - pause voice recognition interrupt."""
-        if self.voice_recognizer:
+        """Called when TTS playback starts - handle based on voice mode."""
+        if not self.voice_recognizer:
+            return
+        
+        if self._voice_mode == "full":
+            # Full mode: Keep listening but pause interrupt capability
             self.voice_recognizer.pause_tts_interrupt()
+        elif self._voice_mode in ["wait", "stop", "ptt"]:
+            # Wait/Stop/PTT modes: Pause listening entirely during TTS
+            self.voice_recognizer.pause_listening()
     
     def _on_tts_end(self):
-        """Called when TTS playback ends - resume voice recognition interrupt."""
-        if self.voice_recognizer:
+        """Called when TTS playback ends - handle based on voice mode."""
+        if not self.voice_recognizer:
+            return
+        
+        if self._voice_mode == "full":
+            # Full mode: Resume interrupt capability
             self.voice_recognizer.resume_tts_interrupt()
+        elif self._voice_mode in ["wait", "stop", "ptt"]:
+            # Wait/Stop/PTT modes: Resume listening
+            self.voice_recognizer.resume_listening()
     
     def speak(self, text, speed=1.0, callback=None):
         """Convert text to speech and play audio.
@@ -139,6 +154,20 @@ class VoiceManager:
             True if listening, False otherwise
         """
         return self.voice_recognizer and self.voice_recognizer.is_running
+    
+    def set_voice_mode(self, mode):
+        """Set the voice mode (full, wait, stop, ptt).
+        
+        Args:
+            mode: Voice mode to use
+            
+        Returns:
+            True if successful
+        """
+        if mode in ["full", "wait", "stop", "ptt"]:
+            self._voice_mode = mode
+            return True
+        return False
         
     def set_speed(self, speed):
         """Set the TTS speed.
