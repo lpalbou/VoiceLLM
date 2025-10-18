@@ -877,6 +877,8 @@ voice_manager.listen(
 
 This is a test project that I designed with examples to work with Ollama, but I will adapt the examples and voicellm to work with any LLM provider (anthropic, openai, etc).
 
+Next iteration will leverage directly [AbstractCore](https://www.abstractcore.ai) to handle everything related to LLM, their providers, models and configurations.
+
 ## License and Acknowledgments
 
 VoiceLLM is licensed under the [MIT License](LICENSE).
