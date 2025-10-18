@@ -11,7 +11,14 @@ While we provide CLI and WEB examples, VoiceLLM is designed to be integrated in 
 
 ## Features
 
-- **Text-to-Speech**: High-quality speech synthesis with adjustable speed
+- **High-Quality TTS**: Best-in-class speech synthesis with VITS model
+  - Natural prosody and intonation
+  - Adjustable speed without pitch distortion (using librosa time-stretching)
+  - Multiple quality levels (VITS best, fast_pitch fallback)
+  - Automatic fallback if espeak-ng not installed
+- **Cross-Platform**: Works on macOS, Linux, and Windows
+  - Best quality: Install espeak-ng (easy on all platforms)
+  - Fallback mode: Works without any system dependencies
 - **Speech-to-Text**: Accurate voice recognition using OpenAI's Whisper
 - **Voice Activity Detection**: Efficient speech detection using WebRTC VAD
 - **Interrupt Handling**: Stop TTS by speaking or using stop commands
@@ -23,6 +30,39 @@ While we provide CLI and WEB examples, VoiceLLM is designed to be integrated in 
 
 - Python 3.8+ (3.11 recommended)
 - PortAudio for audio input/output
+- **Recommended**: espeak-ng for best voice quality (VITS model)
+
+### Installing espeak-ng (Recommended for Best Quality)
+
+VoiceLLM will work without espeak-ng, but voice quality will be significantly better with it:
+
+**macOS:**
+```bash
+brew install espeak-ng
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt-get install espeak-ng
+```
+
+**Linux (Fedora/RHEL):**
+```bash
+sudo yum install espeak-ng
+```
+
+**Windows:**
+```bash
+# Option 1: Using Conda
+conda install -c conda-forge espeak-ng
+
+# Option 2: Using Chocolatey
+choco install espeak-ng
+
+# Option 3: Download installer from https://github.com/espeak-ng/espeak-ng/releases
+```
+
+**Without espeak-ng:** VoiceLLM will automatically fall back to a simpler TTS model (fast_pitch) that works everywhere but has lower voice quality.
 
 ### Basic Installation
 
@@ -163,7 +203,11 @@ All commands must start with `/` except `stop`:
   - `wait` - Pause listening while speaking (recommended, reduces self-interruption)
   - `stop` - Only stop on 'stop' keyword (planned)
   - `ptt` - Push-to-talk mode (planned)
-- `/speed <number>` - Set TTS speed (0.5-2.0, default: 0)
+- `/speed <number>` - Set TTS speed (0.5-2.0, default: 1.0, **pitch preserved**)
+- `/tts_model <model>` - Switch TTS model:
+  - `fast_pitch` - Default (fast, good quality)
+  - `glow-tts` - Alternative (similar quality)
+  - `tacotron2-DDC` - Legacy (slower, stable)
 - `/whisper <model>` - Switch Whisper model (tiny|base|small|medium|large)
 - `/stop` - Stop voice mode or TTS playback
 
@@ -235,25 +279,65 @@ voicellm-cli simple
 The main class that coordinates TTS and STT functionality:
 
 ```python
-# Initialize
-manager = VoiceManager(tts_model="tts_models/en/ljspeech/tacotron2-DDC", 
-                      whisper_model="tiny", debug_mode=False)
+from voicellm import VoiceManager
 
-# TTS
-manager.speak(text, speed=1.0, callback=None)
-manager.stop_speaking()
-manager.is_speaking()
+# Initialize with default fast_pitch model
+manager = VoiceManager(
+    tts_model="tts_models/en/ljspeech/fast_pitch",  # Default
+    whisper_model="tiny",
+    debug_mode=False
+)
 
-# STT
+# === TTS (Text-to-Speech) ===
+
+# Basic speech synthesis
+manager.speak("Hello world")
+
+# With speed control (pitch preserved via time-stretching!)
+manager.speak("This is 20% faster", speed=1.2)
+manager.speak("This is half speed", speed=0.5)
+
+# Check if speaking
+if manager.is_speaking():
+    manager.stop_speaking()
+
+# Change TTS speed globally
+manager.set_speed(1.3)  # All subsequent speech will be 30% faster
+
+# Change TTS model dynamically
+manager.set_tts_model("tts_models/en/ljspeech/glow-tts")
+
+# Available TTS models (quality ranking):
+# - "tts_models/en/ljspeech/vits" (BEST quality, requires espeak-ng)
+# - "tts_models/en/ljspeech/fast_pitch" (fallback, works everywhere)
+# - "tts_models/en/ljspeech/glow-tts" (alternative fallback)
+# - "tts_models/en/ljspeech/tacotron2-DDC" (legacy)
+
+# === STT (Speech-to-Text) ===
+
+def on_transcription(text):
+    print(f"You said: {text}")
+
 manager.listen(on_transcription, on_stop=None)
 manager.stop_listening()
 manager.is_listening()
 
-# Configuration
-manager.change_whisper_model(model_name)
-manager.change_vad_aggressiveness(aggressiveness)
+# Change Whisper model
+manager.set_whisper("base")  # tiny, base, small, medium, large
 
-# Cleanup
+# === Voice Modes ===
+
+# Control how voice recognition behaves during TTS
+manager.set_voice_mode("wait")  # Pause listening while speaking (recommended)
+manager.set_voice_mode("full")  # Keep listening, interrupt on speech
+manager.set_voice_mode("off")   # Disable voice recognition
+
+# === VAD (Voice Activity Detection) ===
+
+manager.change_vad_aggressiveness(2)  # 0-3, higher = more aggressive
+
+# === Cleanup ===
+
 manager.cleanup()
 ```
 
@@ -264,11 +348,24 @@ Handles text-to-speech synthesis:
 ```python
 from voicellm.tts import TTSEngine
 
-tts = TTSEngine(model_name="tts_models/en/ljspeech/tacotron2-DDC", debug_mode=False)
-tts.speak(text, speed=1.0, callback=None)
+# Initialize with fast_pitch model (default, no external dependencies)
+tts = TTSEngine(
+    model_name="tts_models/en/ljspeech/fast_pitch",
+    debug_mode=False,
+    streaming=True  # Enable progressive playback for long text
+)
+
+# Speak with speed control (pitch preserved via time-stretching)
+tts.speak(text, speed=1.2, callback=None)  # 20% faster, same pitch
 tts.stop()
 tts.is_active()
 ```
+
+**Important Note on Speed Parameter:**
+- The speed parameter now uses proper time-stretching (via librosa)
+- Changing speed does NOT affect pitch anymore
+- Range: 0.5 (half speed) to 2.0 (double speed)
+- Example: `speed=1.3` makes speech 30% faster while preserving natural pitch
 
 ### VoiceRecognizer
 
@@ -291,6 +388,87 @@ recognizer.start(tts_interrupt_callback=None)
 recognizer.stop()
 recognizer.change_whisper_model("base")
 recognizer.change_vad_aggressiveness(2)
+```
+
+## Quick Reference: Speed & Model Control
+
+### Changing TTS Speed
+
+**In CLI/REPL:**
+```bash
+/speed 1.2    # 20% faster, pitch preserved
+/speed 0.8    # 20% slower, pitch preserved
+```
+
+**Programmatically:**
+```python
+from voicellm import VoiceManager
+
+vm = VoiceManager()
+
+# Method 1: Set global speed
+vm.set_speed(1.3)  # All speech will be 30% faster
+vm.speak("This will be 30% faster")
+
+# Method 2: Per-speech speed
+vm.speak("This is 50% faster", speed=1.5)
+vm.speak("This is normal speed", speed=1.0)
+vm.speak("This is half speed", speed=0.5)
+
+# Get current speed
+current = vm.get_speed()  # Returns 1.3 from set_speed() above
+```
+
+### Changing TTS Model
+
+**In CLI/REPL:**
+```bash
+/tts_model fast_pitch     # Default model
+/tts_model glow-tts       # Alternative model
+/tts_model tacotron2-DDC  # Legacy model
+```
+
+**Programmatically:**
+```python
+from voicellm import VoiceManager
+
+# Method 1: Set at initialization
+vm = VoiceManager(tts_model="tts_models/en/ljspeech/glow-tts")
+
+# Method 2: Change dynamically at runtime
+vm.set_tts_model("tts_models/en/ljspeech/fast_pitch")
+vm.speak("Using fast_pitch now")
+
+vm.set_tts_model("tts_models/en/ljspeech/glow-tts")
+vm.speak("Using glow-tts now")
+
+# Available models (quality ranking):
+models = [
+    "tts_models/en/ljspeech/vits",          # BEST (requires espeak-ng)
+    "tts_models/en/ljspeech/fast_pitch",    # Good (works everywhere)
+    "tts_models/en/ljspeech/glow-tts",      # Alternative fallback
+    "tts_models/en/ljspeech/tacotron2-DDC"  # Legacy
+]
+```
+
+### Complete Example: Experiment with Settings
+
+```python
+from voicellm import VoiceManager
+import time
+
+vm = VoiceManager()
+
+# Test different models
+for model in ["fast_pitch", "glow-tts", "tacotron2-DDC"]:
+    full_name = f"tts_models/en/ljspeech/{model}"
+    vm.set_tts_model(full_name)
+    
+    # Test different speeds with each model
+    for speed in [0.8, 1.0, 1.2]:
+        vm.speak(f"Testing {model} at {speed}x speed", speed=speed)
+        while vm.is_speaking():
+            time.sleep(0.1)
 ```
 
 ## Integration with Text Generation Systems
@@ -435,16 +613,21 @@ except KeyboardInterrupt:
 ```python
 # Full configuration example
 voice_manager = VoiceManager(
-    tts_model="tts_models/en/ljspeech/tacotron2-DDC",  # TTS model
+    tts_model="tts_models/en/ljspeech/fast_pitch",  # Default (no external deps)
     whisper_model="base",  # Whisper STT model (tiny, base, small, medium, large)
     debug_mode=True  # Enable debug logging
 )
 
+# Alternative TTS models (all pure Python, cross-platform):
+# - "tts_models/en/ljspeech/fast_pitch" - Default (fast, good quality)
+# - "tts_models/en/ljspeech/glow-tts" - Alternative (similar quality)
+# - "tts_models/en/ljspeech/tacotron2-DDC" - Legacy (older, slower)
+
 # Set voice mode (full, wait, off)
 voice_manager.set_voice_mode("wait")  # Recommended to avoid self-interruption
 
-# Adjust settings
-voice_manager.set_speed(1.10)  # TTS speed (default is 1.0)
+# Adjust settings (speed now preserves pitch!)
+voice_manager.set_speed(1.2)  # TTS speed (default is 1.0, range 0.5-2.0)
 voice_manager.change_vad_aggressiveness(2)  # VAD sensitivity (0-3)
 ```
 

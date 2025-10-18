@@ -59,7 +59,10 @@ class VoiceREPL(cmd.Cmd):
         self.voice_mode_active = False  # Is voice recognition running?
         
         # System prompt
-        self.system_prompt = "Be a helpful and concise AI assistant."
+        self.system_prompt = """
+                You are a Helpful Voice Assistant. By design, your answers are short and more conversational, unless specifically asked to detail something.
+                You only speak, so never use any text formatting or markdown. Write for a speaker.
+                """
         
         # Message history
         self.messages = [{"role": "system", "content": self.system_prompt}]
@@ -394,6 +397,42 @@ class VoiceREPL(cmd.Cmd):
         except ValueError:
             print("Usage: /speed <number>  (e.g., /speed 1.5)")
     
+    def do_tts_model(self, arg):
+        """Change TTS model.
+        
+        Available models (quality ranking):
+          vits          - BEST quality (requires espeak-ng)
+          fast_pitch    - Good quality (works everywhere)
+          glow-tts      - Alternative fallback
+          tacotron2-DDC - Legacy
+        
+        Usage:
+          /tts_model vits
+          /tts_model fast_pitch
+        """
+        model_shortcuts = {
+            'vits': 'tts_models/en/ljspeech/vits',
+            'fast_pitch': 'tts_models/en/ljspeech/fast_pitch',
+            'glow-tts': 'tts_models/en/ljspeech/glow-tts',
+            'tacotron2-DDC': 'tts_models/en/ljspeech/tacotron2-DDC',
+        }
+        
+        arg = arg.strip()
+        if not arg:
+            print("Usage: /tts_model <model_name>")
+            print("Available models: vits (best), fast_pitch, glow-tts, tacotron2-DDC")
+            return
+        
+        # Get full model name
+        model_name = model_shortcuts.get(arg, arg)
+        
+        print(f"Changing TTS model to: {model_name}")
+        try:
+            self.voice_manager.set_tts_model(model_name)
+            print("✓ TTS model changed successfully")
+        except Exception as e:
+            print(f"✗ Error changing model: {e}")
+    
     def do_whisper(self, arg):
         """Change Whisper model."""
         model = arg.strip()
@@ -457,23 +496,24 @@ class VoiceREPL(cmd.Cmd):
     def do_help(self, arg):
         """Show help information."""
         print("Commands:")
-        print("  /exit, /q, /quit   Exit REPL")
-        print("  /clear             Clear history")
-        print("  /tts on|off        Toggle TTS")
-        print("  /voice <mode>      Voice input: off|full|wait|stop|ptt")
-        print("  /speed <number>    Set TTS speed (0.5-2.0, default: 1.0)")
-        print("  /whisper <model>   Switch Whisper model: tiny|base|small|medium|large")
-        print("  /system <prompt>   Set system prompt")
-        print("  /stop              Stop voice mode or TTS playback")
-        print("  /tokens            Display token usage stats")
-        print("  /help              Show this help")
-        print("  /save <filename>   Save chat history to file")
-        print("  /load <filename>   Load chat history from file")
-        print("  /model <name>      Change the LLM model")
-        print("  /temperature <val> Set temperature (0.0-2.0, default: 0.7)")
-        print("  /max_tokens <num>  Set max tokens (default: 4096)")
-        print("  stop               Stop voice mode or TTS (voice command)")
-        print("  <message>          Send to LLM (text mode)")
+        print("  /exit, /q, /quit    Exit REPL")
+        print("  /clear              Clear history")
+        print("  /tts on|off         Toggle TTS")
+        print("  /voice <mode>       Voice input: off|full|wait|stop|ptt")
+        print("  /speed <number>     Set TTS speed (0.5-2.0, default: 1.0, pitch preserved)")
+        print("  /tts_model <model>  Switch TTS model: vits(best)|fast_pitch|glow-tts|tacotron2-DDC")
+        print("  /whisper <model>    Switch Whisper model: tiny|base|small|medium|large")
+        print("  /system <prompt>    Set system prompt")
+        print("  /stop               Stop voice mode or TTS playback")
+        print("  /tokens             Display token usage stats")
+        print("  /help               Show this help")
+        print("  /save <filename>    Save chat history to file")
+        print("  /load <filename>    Load chat history from file")
+        print("  /model <name>       Change the LLM model")
+        print("  /temperature <val>  Set temperature (0.0-2.0, default: 0.7)")
+        print("  /max_tokens <num>   Set max tokens (default: 4096)")
+        print("  stop                Stop voice mode or TTS (voice command)")
+        print("  <message>           Send to LLM (text mode)")
         print()
         print("Note: ALL commands must start with / except 'stop'")
         print("In voice mode, say 'stop' to exit voice mode.")

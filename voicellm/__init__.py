@@ -14,8 +14,20 @@ warnings.filterwarnings(
     category=FutureWarning
 )
 
+# Suppress pkg_resources deprecation warning from jieba
+warnings.filterwarnings(
+    "ignore",
+    message=".*pkg_resources.*",
+    category=UserWarning
+)
+warnings.filterwarnings(
+    "ignore",
+    message=".*pkg_resources.*",
+    category=DeprecationWarning
+)
+
 # Import the main class for public API
 from .voice_manager import VoiceManager
 
-__version__ = "0.1.7"
+__version__ = "0.1.9"
 __all__ = ['VoiceManager'] 

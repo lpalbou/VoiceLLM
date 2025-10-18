@@ -7,7 +7,7 @@ from .recognition import VoiceRecognizer
 class VoiceManager:
     """Main class for voice interaction capabilities."""
     
-    def __init__(self, tts_model="tts_models/en/ljspeech/tacotron2-DDC",
+    def __init__(self, tts_model="tts_models/en/ljspeech/vits",
                  whisper_model="tiny", debug_mode=False):
         """Initialize the Voice Manager.
         
@@ -189,6 +189,38 @@ class VoiceManager:
         """
         return self.speed
 
+    def set_tts_model(self, model_name):
+        """Change the TTS model.
+        
+        Available models (all pure Python, cross-platform):
+        - "tts_models/en/ljspeech/fast_pitch" (default, recommended)
+        - "tts_models/en/ljspeech/glow-tts" (alternative)
+        - "tts_models/en/ljspeech/tacotron2-DDC" (legacy)
+        
+        Args:
+            model_name: TTS model name to use
+            
+        Returns:
+            True if successful
+            
+        Example:
+            vm.set_tts_model("tts_models/en/ljspeech/glow-tts")
+        """
+        # Stop any current speech
+        self.stop_speaking()
+        
+        # Reinitialize TTS engine with new model
+        self.tts_engine = TTSEngine(
+            model_name=model_name,
+            debug_mode=self.debug_mode
+        )
+        
+        # Restore callbacks
+        self.tts_engine.on_playback_start = self._on_tts_start
+        self.tts_engine.on_playback_end = self._on_tts_end
+        
+        return True
+    
     def set_whisper(self, model_name):
         """Set the Whisper model.
         

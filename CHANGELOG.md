@@ -2,7 +2,37 @@
 
 All notable changes to the VoiceLLM project will be documented in this file.
 
-## [0.1.9] - 2025-10-17
+## [0.1.9] - 2025-10-18
+
+### Added
+- **New Method**: `VoiceManager.set_tts_model()` - Change TTS model dynamically
+  - Switch between fast_pitch, glow-tts, tacotron2-DDC at runtime
+  - No need to reinitialize VoiceManager
+- **New REPL Command**: `/tts_model <model>` - Change TTS model from CLI
+  - Shortcuts: fast_pitch, glow-tts, tacotron2-DDC
+  - Example: `/tts_model glow-tts`
+
+### Fixed
+- **CRITICAL**: Fixed speed parameter affecting pitch - now uses librosa time-stretching
+  - Speed changes no longer alter voice pitch (preserves naturalness)
+  - Proper time-stretching algorithm applied to all audio chunks
+  - Speed parameter now works as expected: 1.2x = 20% faster with same pitch
+  - Works with both `speak(speed=X)` and `set_speed(X)` methods
+
+### Changed
+- **Changed default TTS model to VITS (best quality, with auto-fallback)**
+  - VITS provides significantly better voice quality than other models
+  - Requires espeak-ng (easy to install on all platforms)
+  - Automatic fallback to fast_pitch if espeak-ng not found
+  - Clear installation instructions for macOS, Linux, and Windows
+- **Honest about voice quality trade-offs:**
+  - VITS (best): Natural prosody, requires espeak-ng
+  - fast_pitch/glow-tts: Lower quality but works everywhere
+  - Users can choose based on their needs
+- Added `librosa>=0.10.0` dependency for audio time-stretching (pure Python)
+- Silenced pkg_resources deprecation warning from jieba dependency
+
+## [0.1.8] - 2025-10-17
 
 ### Fixed
 - **CRITICAL**: Fixed Python 3.12 compatibility issue by updating TTS dependency from `TTS>=0.21.0` to `coqui-tts>=0.27.0`

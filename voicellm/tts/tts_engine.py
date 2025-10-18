@@ -17,12 +17,32 @@ import logging
 import warnings
 import re
 from TTS.api import TTS
+import librosa
 
 # Suppress the PyTorch FutureWarning about torch.load
 warnings.filterwarnings(
     "ignore", 
     message="You are using `torch.load` with `weights_only=False`", 
     category=FutureWarning
+)
+
+# Suppress pkg_resources deprecation warning from jieba
+warnings.filterwarnings(
+    "ignore",
+    message=".*pkg_resources is deprecated.*",
+    category=DeprecationWarning
+)
+
+# Suppress coqpit deserialization warnings from TTS models
+warnings.filterwarnings(
+    "ignore",
+    message=".*Type mismatch.*",
+    category=UserWarning
+)
+warnings.filterwarnings(
+    "ignore",
+    message=".*Failed to deserialize field.*",
+    category=UserWarning
 )
 
 def preprocess_text(text):
@@ -57,6 +77,33 @@ def preprocess_text(text):
     text = re.sub(r'([.,!?;:])([^\s])', r'\1 \2', text)
     
     return text.strip()
+
+
+def apply_speed_without_pitch_change(audio, speed, sr=22050):
+    """Apply speed change without affecting pitch using librosa time_stretch.
+    
+    Args:
+        audio: Audio samples as numpy array
+        speed: Speed multiplier (0.5-2.0, where >1.0 is faster, <1.0 is slower)
+        sr: Sample rate (default 22050)
+        
+    Returns:
+        Time-stretched audio samples
+    """
+    if speed == 1.0:
+        return audio
+    
+    # librosa.effects.time_stretch expects rate parameter where:
+    # rate > 1.0 makes audio faster (shorter)
+    # rate < 1.0 makes audio slower (longer)
+    # This matches our speed semantics
+    try:
+        stretched_audio = librosa.effects.time_stretch(audio, rate=speed)
+        return stretched_audio
+    except Exception as e:
+        # If time-stretching fails, return original audio
+        logging.warning(f"Time-stretching failed: {e}, using original audio")
+        return audio
 
 
 def chunk_long_text(text, max_chunk_size=300):
@@ -120,13 +167,21 @@ def chunk_long_text(text, max_chunk_size=300):
 class TTSEngine:
     """Text-to-speech engine with interrupt capability."""
     
-    def __init__(self, model_name="tts_models/en/ljspeech/tacotron2-DDC", debug_mode=False, streaming=True):
+    def __init__(self, model_name="tts_models/en/ljspeech/vits", debug_mode=False, streaming=True):
         """Initialize the TTS engine.
         
         Args:
-            model_name: TTS model to use
+            model_name: TTS model to use (default: vits - best quality, requires espeak-ng)
             debug_mode: Enable debug output
             streaming: Enable streaming playback (start playing while synthesizing remaining chunks)
+        
+        Note:
+            VITS model (default) requires espeak-ng for best quality:
+            - macOS: brew install espeak-ng
+            - Linux: sudo apt-get install espeak-ng  
+            - Windows: See installation guide in README
+            
+            If espeak-ng is not available, will auto-fallback to fast_pitch
         """
         # Set up debug mode
         self.debug_mode = debug_mode
@@ -155,9 +210,36 @@ class TTSEngine:
         try:
             if self.debug_mode:
                 print(f" > Loading TTS model: {model_name}")
-                
-            # Initialize TTS
-            self.tts = TTS(model_name=model_name, progress_bar=self.debug_mode)
+            
+            # Try to initialize TTS
+            try:
+                self.tts = TTS(model_name=model_name, progress_bar=self.debug_mode)
+            except Exception as e:
+                error_msg = str(e).lower()
+                # Check if this is an espeak-related error
+                if ("espeak" in error_msg or "phoneme" in error_msg):
+                    # Restore stdout to show user-friendly message
+                    if not debug_mode:
+                        sys.stdout = sys.__stdout__
+                    
+                    print("\n" + "="*70)
+                    print("⚠️  VITS Model Requires espeak-ng (Not Found)")
+                    print("="*70)
+                    print("\nFor BEST voice quality, install espeak-ng:")
+                    print("  • macOS:   brew install espeak-ng")
+                    print("  • Linux:   sudo apt-get install espeak-ng")
+                    print("  • Windows: conda install espeak-ng  (or see README)")
+                    print("\nFalling back to fast_pitch (lower quality, but works)")
+                    print("="*70 + "\n")
+                    
+                    if not debug_mode:
+                        sys.stdout = null_out
+                    
+                    # Fallback to fast_pitch
+                    self.tts = TTS(model_name="tts_models/en/ljspeech/fast_pitch", progress_bar=self.debug_mode)
+                else:
+                    # Different error, re-raise
+                    raise
         finally:
             # Restore stdout if we redirected it
             if not debug_mode:
@@ -245,9 +327,17 @@ class TTSEngine:
                             print("TTS failed to generate audio for first chunk.")
                         return False
                     
+                    # Apply speed adjustment using time-stretching (preserves pitch)
+                    if speed != 1.0:
+                        first_audio = apply_speed_without_pitch_change(
+                            np.array(first_audio), speed
+                        )
+                    
                     if self.debug_mode:
                         sys.stdout = sys.__stdout__
                         print(f" > Chunk 1 generated {len(first_audio)} audio samples")
+                        if speed != 1.0:
+                            print(f" > Applied time-stretch: {speed}x (pitch preserved)")
                         print(f" > Starting playback while synthesizing remaining chunks...")
                         if not self.debug_mode:
                             sys.stdout = null_out
@@ -273,6 +363,11 @@ class TTSEngine:
                         chunk_audio = self.tts.tts(chunk, split_sentences=True)
                         
                         if chunk_audio:
+                            # Apply speed adjustment using time-stretching (preserves pitch)
+                            if speed != 1.0:
+                                chunk_audio = apply_speed_without_pitch_change(
+                                    np.array(chunk_audio), speed
+                                )
                             audio_chunks.append(chunk_audio)
                             if self.debug_mode and len(text_chunks) > 1:
                                 sys.stdout = sys.__stdout__
@@ -318,11 +413,8 @@ class TTSEngine:
                     if self.on_playback_start:
                         self.on_playback_start()
                     
-                    # Determine playback rate
-                    if speed != 1.0:
-                        playback_rate = int(22050 * speed)
-                    else:
-                        playback_rate = 22050
+                    # Use standard playback rate (speed is handled via time-stretching)
+                    playback_rate = 22050
                     
                     # STREAMING MODE: Play from queue while synthesizing remaining chunks
                     if audio is None:  # Streaming mode indicator
@@ -338,6 +430,11 @@ class TTSEngine:
                                 try:
                                     chunk_audio = self.tts.tts(text_chunks[i], split_sentences=True)
                                     if chunk_audio:
+                                        # Apply speed adjustment using time-stretching (preserves pitch)
+                                        if speed != 1.0:
+                                            chunk_audio = apply_speed_without_pitch_change(
+                                                np.array(chunk_audio), speed
+                                            )
                                         with self.queue_lock:
                                             self.audio_queue.append(chunk_audio)
                                         if self.debug_mode:

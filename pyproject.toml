@@ -31,6 +31,7 @@ dependencies = [
     "coqui-tts>=0.27.0",
     "torch>=2.0.0",
     "torchaudio>=2.0.0",
+    "librosa>=0.10.0",
     "soundfile>=0.12.1",
     "requests>=2.31.0",
     "flask>=2.0.0",
