@@ -2,7 +2,7 @@
 
 All notable changes to the VoiceLLM project will be documented in this file.
 
-## [0.1.8] - 2025-10-17
+## [0.1.9] - 2025-10-17
 
 ### Fixed
 - **CRITICAL**: Fixed Python 3.12 compatibility issue by updating TTS dependency from `TTS>=0.21.0` to `coqui-tts>=0.27.0`
@@ -22,6 +22,14 @@ All notable changes to the VoiceLLM project will be documented in this file.
 - **Reduced chunk size from 500 to 300 characters** to prevent distortion on Tacotron2-DDC model
   - Based on empirical testing with real-world long texts
   - Eliminates audio degradation issues
+- **Enhanced Help System**: Updated REPL `/help` command with actionable parameters and examples
+  - Added default values for all configurable parameters
+  - Improved clarity with all available options listed
+  - Organized commands into logical categories
+- **Improved README Documentation**: 
+  - Added clear shell usage section with command-line examples
+  - Enhanced integration section with 4 complete examples (Ollama, OpenAI, TTS-only, STT-only)
+  - Added key integration points with configuration examples
 - Updated package dependency specifications in both requirements.txt and pyproject.toml
 - Added Python 3.12 classifier to pyproject.toml to indicate official support
 

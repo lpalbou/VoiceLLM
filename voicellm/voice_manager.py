@@ -17,7 +17,7 @@ class VoiceManager:
             debug_mode: Enable debug logging
         """
         self.debug_mode = debug_mode
-        self.speed = 1.15  # 15% faster than default for better user experience
+        self.speed = 1.0  
         
         # Initialize TTS engine
         self.tts_engine = TTSEngine(

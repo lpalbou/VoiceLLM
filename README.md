@@ -163,7 +163,7 @@ All commands must start with `/` except `stop`:
   - `wait` - Pause listening while speaking (recommended, reduces self-interruption)
   - `stop` - Only stop on 'stop' keyword (planned)
   - `ptt` - Push-to-talk mode (planned)
-- `/speed <number>` - Set TTS speed (0.5-2.0, default: 1.15)
+- `/speed <number>` - Set TTS speed (0.5-2.0, default: 0)
 - `/whisper <model>` - Switch Whisper model (tiny|base|small|medium|large)
 - `/stop` - Stop voice mode or TTS playback
 
@@ -444,7 +444,7 @@ voice_manager = VoiceManager(
 voice_manager.set_voice_mode("wait")  # Recommended to avoid self-interruption
 
 # Adjust settings
-voice_manager.set_speed(1.15)  # TTS speed (default is 1.15)
+voice_manager.set_speed(1.10)  # TTS speed (default is 1.0)
 voice_manager.change_vad_aggressiveness(2)  # VAD sensitivity (0-3)
 ```
 

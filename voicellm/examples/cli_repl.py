@@ -461,7 +461,7 @@ class VoiceREPL(cmd.Cmd):
         print("  /clear             Clear history")
         print("  /tts on|off        Toggle TTS")
         print("  /voice <mode>      Voice input: off|full|wait|stop|ptt")
-        print("  /speed <number>    Set TTS speed (0.5-2.0, default: 1.15)")
+        print("  /speed <number>    Set TTS speed (0.5-2.0, default: 1.0)")
         print("  /whisper <model>   Switch Whisper model: tiny|base|small|medium|large")
         print("  /system <prompt>   Set system prompt")
         print("  /stop              Stop voice mode or TTS playback")
