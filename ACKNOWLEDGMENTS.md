@@ -25,6 +25,21 @@ VoiceLLM uses several open-source libraries and models. We would like to acknowl
 ### Audio Processing
 - [SoundFile](https://github.com/bastibe/python-soundfile) - Licensed under BSD-3-Clause
 - [SoundDevice](https://github.com/spatialaudio/python-sounddevice) - Licensed under BSD-3-Clause
+- [Librosa](https://github.com/librosa/librosa) - Licensed under ISC
+
+### Utilities
+- [tiktoken](https://github.com/openai/tiktoken) - Licensed under MIT
+
+## Optional System Dependencies
+
+VoiceLLM can optionally use the following system-level software for enhanced functionality:
+
+### Text-to-Speech Phonemization
+- [eSpeak NG](https://github.com/espeak-ng/espeak-ng) - Licensed under GPL-3.0
+  - Optional dependency for VITS TTS model (provides best voice quality)
+  - Used for phoneme conversion in advanced TTS synthesis
+  - VoiceLLM automatically falls back to other models if not installed
+  - Installation: `brew install espeak-ng` (macOS), `apt-get install espeak-ng` (Linux), or conda/chocolatey (Windows)
 
 ## Models
 

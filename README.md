@@ -99,6 +99,8 @@ The easiest way to get started is to use VoiceLLM directly from your shell:
 ```bash
 # Start VoiceLLM in voice mode (TTS ON, STT ON)
 voicellm
+# → Automatically uses VITS if espeak-ng installed (best quality)
+# → Falls back to fast_pitch if espeak-ng not found
 
 # Or start with custom settings
 voicellm --model gemma3:latest --whisper base
@@ -108,6 +110,8 @@ voicellm --no-voice
 ```
 
 Once started, you can interact with the AI using voice or text. Use `/help` to see all available commands.
+
+**Note**: VoiceLLM automatically selects the best available TTS model. For best quality, install espeak-ng (see Installation section above).
 
 ### Integrating VoiceLLM in Your Python Project
 
@@ -430,7 +434,8 @@ current = vm.get_speed()  # Returns 1.3 from set_speed() above
 
 **In CLI/REPL:**
 ```bash
-/tts_model fast_pitch     # Default model
+/tts_model vits           # Best quality (needs espeak-ng)
+/tts_model fast_pitch     # Good quality (works everywhere)
 /tts_model glow-tts       # Alternative model
 /tts_model tacotron2-DDC  # Legacy model
 ```
@@ -466,8 +471,8 @@ import time
 
 vm = VoiceManager()
 
-# Test different models
-for model in ["fast_pitch", "glow-tts", "tacotron2-DDC"]:
+# Test different models (vits requires espeak-ng)
+for model in ["vits", "fast_pitch", "glow-tts", "tacotron2-DDC"]:
     full_name = f"tts_models/en/ljspeech/{model}"
     vm.set_tts_model(full_name)
     
