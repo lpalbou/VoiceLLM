@@ -29,5 +29,5 @@ warnings.filterwarnings(
 # Import the main class for public API
 from .voice_manager import VoiceManager
 
-__version__ = "0.1.9"
+__version__ = "0.2.0"
 __all__ = ['VoiceManager'] 

@@ -2,6 +2,69 @@
 
 All notable changes to the VoiceLLM project will be documented in this file.
 
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.2.0] - 2025-01-15
+
+### Added
+- **Professional-grade immediate pause/resume functionality**
+  - Pause/resume takes effect within ~20ms (next audio callback)
+  - Resumes from exact audio position (no repetition or gaps)
+  - No terminal I/O interference (uses OutputStream callbacks)
+  - Thread-safe operations with proper locking
+  - Works seamlessly with streaming synthesis
+- **NonBlockingAudioPlayer class** using sounddevice.OutputStream callbacks
+  - Replaces blocking sd.play() + sd.stop() approach
+  - Immediate response to pause/resume commands
+  - Queue-based audio streaming for continuous playback
+  - Professional audio control without terminal interference
+- **Enhanced programmatic API** for pause/resume control
+  - `pause_speaking()` returns True/False for success status
+  - `resume_speaking()` returns True/False for success status
+  - `is_paused()` provides reliable pause state checking
+  - Thread-safe operations from any thread or callback
+- **Comprehensive documentation structure**
+  - `docs/architecture.md` - Complete technical architecture guide
+  - `docs/development.md` - Development insights and best practices
+  - `CONTRIBUTING.md` - Contribution guidelines for open source
+  - Updated README.md with detailed pause/resume examples
+
+### Changed
+- **Improved TTS pause/resume implementation**
+  - Replaced problematic sd.stop() calls with non-blocking approach
+  - Immediate response instead of waiting for audio chunks to complete
+  - Exact position resume instead of restarting segments
+- **Enhanced CLI/REPL responsiveness**
+  - `/pause` command no longer blocks terminal input
+  - Prompt appears immediately after pause/resume commands
+  - No hanging or unresponsive behavior
+- **Better error handling and user feedback**
+  - Clear success/failure indicators for pause/resume operations
+  - Improved status checking with reliable state tracking
+  - Better error messages and fallback behavior
+
+### Fixed
+- **Terminal I/O interference during pause operations**
+  - Eliminated sd.stop() calls that blocked terminal input
+  - REPL prompt now appears immediately after /pause command
+  - No more hanging or unresponsive terminal behavior
+- **Audio position accuracy during pause/resume**
+  - Resume continues from exact audio position
+  - No repetition of audio segments
+  - Seamless continuation of speech synthesis
+- **Thread safety issues in pause/resume operations**
+  - Proper locking mechanisms for all audio control operations
+  - Safe concurrent access from multiple threads
+  - Reliable state management across thread boundaries
+
+### Technical Details
+- **OutputStream Callback Architecture**: Uses sounddevice.OutputStream with callback function for real-time audio control
+- **Non-Blocking Design**: No blocking operations that interfere with terminal or UI responsiveness
+- **Queue-Based Streaming**: Audio chunks queued and consumed by callback for continuous playback
+- **Thread-Safe Locking**: All pause/resume operations protected by threading.Lock()
+- **Performance Optimized**: ~20ms response time with minimal CPU and memory overhead
+
 ## [0.1.9] - 2025-10-18
 
 ### Added

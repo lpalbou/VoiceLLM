@@ -28,7 +28,7 @@ While we provide CLI and WEB examples, VoiceLLM is designed to be integrated in 
 
 ### Prerequisites
 
-- Python 3.8+ (3.11 recommended)
+- Python 3.8+ (3.11+ recommended)
 - PortAudio for audio input/output
 - **Recommended**: espeak-ng for best voice quality (VITS model)
 
@@ -280,9 +280,24 @@ If you encounter issues with the web API:
 voicellm-cli simple
 ```
 
-## Component Overview
+## Documentation
 
-> **📖 For detailed architecture information**, see [`docs/architecture.md`](docs/architecture.md) which explains how VoiceLLM works internally, component communication, and the implementation of immediate pause/resume functionality.
+### 📚 Documentation Overview
+
+- **[README.md](README.md)** - This file: User guide, API reference, and examples
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines and development setup
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
+- **[docs/](docs/)** - Technical documentation for developers
+
+### 🎯 Quick Navigation
+
+- **Getting Started**: [Installation](#installation) and [Quick Start](#quick-start)
+- **Pause/Resume Control**: [TTS Control](#quick-reference-tts-control) section
+- **Integration Examples**: [Integration Guide](#integration-guide-for-third-party-applications)
+- **Technical Details**: [docs/architecture.md](docs/architecture.md) - How immediate pause/resume works
+- **Development**: [CONTRIBUTING.md](CONTRIBUTING.md) - Setup and guidelines
+
+## Component Overview
 
 ### VoiceManager
 

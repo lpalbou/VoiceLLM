@@ -7,7 +7,7 @@ name = "voicellm"
 version = "0.2.0"
 description = "A modular Python library for voice interactions with AI systems"
 readme = "README.md"
-requires-python = ">=3.11.7"
+requires-python = ">=3.8"
 license = "MIT"
 authors = [
     {name = "Laurent-Philippe Albou", email = "lpalbou@gmail.com"}
